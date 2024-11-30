@@ -73,4 +73,4 @@ if __name__ == "__main__":
         print(f"AI: {response}")
 
         with open('chat_logs.txt', 'w') as f:
-            f.write(str(memory.chat_memory.messages.pprint()))
+            f.write(str(memory.chat_memory.messages))

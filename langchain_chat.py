@@ -2,15 +2,18 @@
 langchain_chat.py
 ___
 
-Simple Chat Application with `ConversationSummaryBufferMemory` (deprecated (should use `LangGraph` instead))\
-Yet, this isn't scalable but shows practical usage of memory and chat contexts.
+Simple Chat Application with `LangChain` and `LangGraph's` in-memory `MemorySaver`.
+It shows practical usage of memory and chat contexts. Currently for single user!
 """
 
-# Imports
-from langchain.memory import ConversationSummaryBufferMemory
+# ________Imports___________
+
 from langchain_huggingface import HuggingFaceEndpoint
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import SystemMessage
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import START, MessagesState, StateGraph
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
 from dotenv import load_dotenv
 import os
 
@@ -20,57 +23,60 @@ load_dotenv()
 # Initialize the language model
 HF_TOKEN = os.getenv("HF_TOKEN")
 
-llm = HuggingFaceEndpoint(repo_id="Qwen/Qwen2.5-Coder-32B-Instruct", huggingfacehub_api_token=HF_TOKEN)
-
-
-# Memory for the user
-memory = ConversationSummaryBufferMemory(
-        llm = llm,
-        max_token_limit = 4000, # for conversation
-        memory_key='messages',
-        return_messages=True
+model = HuggingFaceEndpoint(
+    repo_id="Qwen/Qwen2.5-Coder-32B-Instruct", huggingfacehub_api_token=HF_TOKEN
 )
 
 
-# Prompt template
-prompt = ChatPromptTemplate.from_messages(
-    [
-        SystemMessage(
-            content="You are a helpful assistant. Answer all questions to the best of your ability."
-        ),
-        MessagesPlaceholder(variable_name="messages"), # other messages in the prompt!
-    ]
-)
+# Define a new graph
+workflow = StateGraph(state_schema=MessagesState)
 
 
-# Main function to handle user messages.
-def handle_user_message(user_input):
-    # Load memory variables to get the conversation history
-    history = memory.load_memory_variables(inputs={})
+# Define the function that calls the model
+def call_model(state: MessagesState):
 
-    # Generate a response based on the conversation history
-    response = llm.invoke(
-        history["messages"] + [{"role": "user", "content": user_input}]
+    prompt_template = ChatPromptTemplate.from_messages(
+        [
+            SystemMessage(
+                "You're rajneesh Osho, indian philosopher. Answer every query just as he does, answer as concise as possible",
+            ),
+            MessagesPlaceholder(variable_name="messages"),
+        ]
     )
 
-    # Save the user query & AI response in memory
-    memory.save_context(
-        inputs={"USER": user_input}, outputs={"AI": response}
-    )
+    response = model.invoke(prompt_template.invoke(state))
 
-    return response
+    return {"messages": state["messages"] + [AIMessage(response)]}
 
 
+# Define the (single) node in the graph
+workflow.add_edge(START, "model")
+workflow.add_node("model", call_model)
+
+# Add memory
+memory = MemorySaver()
+app = workflow.compile(checkpointer=memory)
 
 # Main template code!
+config = {"configurable": {"thread_id": "darkdk123"}}
+
 if __name__ == "__main__":
     print("Chatbot is ready! Type 'exit' to stop.")
-    while True:
-        user_input = input("You: ")
-        if user_input.lower() == "exit":
-            break
-        response = handle_user_message(user_input)
-        print(f"AI: {response}")
 
-        with open('chat_logs.txt', 'w') as f:
-            f.write(str(memory.chat_memory.messages))
+    while True:
+
+        query = input("User >>> ")
+
+        if query == "exit":
+            break
+
+        input_messages = [HumanMessage(query)]
+
+        output = app.invoke({"messages": input_messages}, config)
+        output["messages"][-1].pretty_print()  # output contains all messages in state
+
+
+
+    state = app.get_state(config).values
+    with open("chat_logs.txt", "a") as f:
+        f.writelines((message.pretty_repr() + "\n" for message in state["messages"]))

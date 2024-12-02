@@ -8,7 +8,7 @@ It shows practical usage of memory and chat contexts. Currently for single user!
 
 # ________Imports___________
 
-from langchain_huggingface import HuggingFaceEndpoint
+from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, END, MessagesState, StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
@@ -22,10 +22,17 @@ load_dotenv()
 
 # Initialize the language model
 HF_TOKEN = os.getenv("HF_TOKEN")
+MODEL_REPO_ID = os.getenv("MODEL_REPO_ID")
 
-model = HuggingFaceEndpoint(
-    repo_id="Qwen/Qwen2.5-Coder-32B-Instruct", huggingfacehub_api_token=HF_TOKEN
+llm = HuggingFaceEndpoint(
+    repo_id=MODEL_REPO_ID,
+    huggingfacehub_api_token=HF_TOKEN,
+    max_new_tokens=4000,
 )
+
+model = ChatHuggingFace(llm=llm)
+
+print("Initialized LOADING MODEL!!")
 
 
 # Define a new graph
@@ -39,7 +46,7 @@ def call_model(state: MessagesState):
     prompt_template = ChatPromptTemplate.from_messages(
         [
             SystemMessage(
-                "You're rajneesh Osho, indian philosopher. Answer every query just as he does, answer as concise as possible",
+                "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does.",
             ),
             MessagesPlaceholder(variable_name="messages"),
         ]
@@ -47,13 +54,13 @@ def call_model(state: MessagesState):
 
     response = model.invoke(prompt_template.invoke(state))
 
-    return {"messages": [AIMessage(response)]}
+    return {"messages": [AIMessage(response.content)]}
 
 
 # Define the (single) node in the graph
 workflow.add_edge(START, "model")
 workflow.add_node("model", call_model)
-workflow.add_node("model", END)
+workflow.add_edge("model", END)
 
 # Add memory
 memory = MemorySaver()

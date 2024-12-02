@@ -10,7 +10,7 @@ It shows practical usage of memory and chat contexts. Currently for single user!
 
 from langchain_huggingface import HuggingFaceEndpoint
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import START, MessagesState, StateGraph
+from langgraph.graph import START, END, MessagesState, StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
@@ -29,6 +29,7 @@ model = HuggingFaceEndpoint(
 
 
 # Define a new graph
+# With built-in MessagesState
 workflow = StateGraph(state_schema=MessagesState)
 
 
@@ -46,12 +47,13 @@ def call_model(state: MessagesState):
 
     response = model.invoke(prompt_template.invoke(state))
 
-    return {"messages": state["messages"] + [AIMessage(response)]}
+    return {"messages": [AIMessage(response)]}
 
 
 # Define the (single) node in the graph
 workflow.add_edge(START, "model")
 workflow.add_node("model", call_model)
+workflow.add_node("model", END)
 
 # Add memory
 memory = MemorySaver()
@@ -75,8 +77,12 @@ if __name__ == "__main__":
         output = app.invoke({"messages": input_messages}, config)
         output["messages"][-1].pretty_print()  # output contains all messages in state
 
-
-
-    state = app.get_state(config).values
+    # Logging the states, to understand workflow!
+    state = app.get_state(config)
     with open("chat_logs.txt", "a") as f:
-        f.writelines((message.pretty_repr() + "\n" for message in state["messages"]))
+        f.writelines(
+            (message.pretty_repr() + "\n" for message in state.values["messages"])
+        )
+
+    with open("state_logs.txt", "w") as f:
+        f.writelines((str(i) for i in str(state)))

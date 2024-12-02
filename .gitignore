@@ -205,6 +205,6 @@ pip-selfcheck.json
 .ionide
 
 # More custom ignores
-chat_logs.txt
+*logs.txt
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,venv

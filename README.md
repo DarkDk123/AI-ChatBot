@@ -14,9 +14,9 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 
 <div>
    <br>
-   <img src="imgs/first.png" alt="Chat App Demo 1" width="40%">
+   <img src="imgs/first.png" alt="Chat App Demo 1" width="45%">
    &nbsp;&nbsp;
-   <img src="imgs/second.png" alt="Chat App Demo 2" width="40%">
+   <img src="imgs/second.png" alt="Chat App Demo 2" width="45%">
 </div>
 
 

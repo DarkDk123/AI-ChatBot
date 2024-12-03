@@ -44,7 +44,7 @@ workflow = StateGraph(state_schema=MessagesState)
 def call_model(state: MessagesState):
     prompt_template = ChatPromptTemplate.from_messages([
         SystemMessage(
-            "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does.",
+            "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does, use concise answers.",
         ),
         MessagesPlaceholder(variable_name="messages"),
     ])

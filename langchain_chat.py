@@ -42,15 +42,12 @@ workflow = StateGraph(state_schema=MessagesState)
 
 # Define the function that calls the model
 def call_model(state: MessagesState):
-
-    prompt_template = ChatPromptTemplate.from_messages(
-        [
-            SystemMessage(
-                "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does.",
-            ),
-            MessagesPlaceholder(variable_name="messages"),
-        ]
-    )
+    prompt_template = ChatPromptTemplate.from_messages([
+        SystemMessage(
+            "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does.",
+        ),
+        MessagesPlaceholder(variable_name="messages"),
+    ])
 
     response = model.invoke(prompt_template.invoke(state))
 
@@ -66,14 +63,14 @@ workflow.add_edge("model", END)
 memory = MemorySaver()
 app = workflow.compile(checkpointer=memory)
 
-# Main template code!
+# Main running code!
 config = {"configurable": {"thread_id": "darkdk123"}}
 
 if __name__ == "__main__":
+    # Testing locally!
     print("Chatbot is ready! Type 'exit' to stop.")
 
     while True:
-
         query = input("User >>> ")
 
         if query == "exit":

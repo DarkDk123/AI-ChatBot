@@ -14,9 +14,8 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 
 <div>
    <br>
-   <img src="imgs/first.png" alt="Chat App Demo 1" width="45%">
-   &nbsp;&nbsp;
-   <img src="imgs/second.png" alt="Chat App Demo 2" width="45%">
+   <img src="imgs/first.png" alt="Chat App Demo 1" width="70%">
+   <img src="imgs/second.png" alt="Chat App Demo 2" width="70%">
 </div>
 
 
@@ -24,7 +23,7 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 
 - 🐍[Python 3.8+](https://www.python.org/downloads/) - You know the beast 😇
   
-- 🦜⛓️ [LangChain](https://langchain.ai/) (with [LangGraph](https://langgraph.ai/)) - Framework for LLM Applications development & orchestration.
+- 🦜⛓️ [LangChain](https://langchain.com/) (with [LangGraph](https://www.langchain.com/langgraph)) - Framework for LLM Applications development & orchestration.
   
 - 🤗 [HuggingFace](https://huggingface.co/) (with [HuggingFace Inference API](https://api-inference.huggingface.co/)) - A library for natural language processing tasks and API for model inference.
   

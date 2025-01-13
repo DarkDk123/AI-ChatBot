@@ -8,8 +8,9 @@ It shows practical usage of memory and chat contexts. Currently for single user!
 
 # ________Imports___________
 
-from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+# from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langgraph.checkpoint.memory import MemorySaver
+from langchain_groq import ChatGroq
 from langgraph.graph import START, END, MessagesState, StateGraph
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -21,16 +22,18 @@ import os
 load_dotenv()
 
 # Initialize the language model
-HF_TOKEN = os.getenv("HF_TOKEN")
+# HF_TOKEN = os.getenv("HF_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 MODEL_REPO_ID = os.getenv("MODEL_REPO_ID")
 
-llm = HuggingFaceEndpoint(
-    repo_id=MODEL_REPO_ID,
-    huggingfacehub_api_token=HF_TOKEN,
-    max_new_tokens=4000,
-)
+# llm = HuggingFaceEndpoint(
+#     repo_id=MODEL_REPO_ID,
+#     huggingfacehub_api_token=HF_TOKEN,
+#     max_new_tokens=4000,
+# )
 
-model = ChatHuggingFace(llm=llm)
+# model = ChatHuggingFace(llm=llm)
+model = ChatGroq(api_key=GROQ_API_KEY)
 
 print("Initialized LOADING MODEL!!")
 
@@ -78,8 +81,16 @@ if __name__ == "__main__":
 
         input_messages = [HumanMessage(query)]
 
-        output = app.invoke({"messages": input_messages}, config)
-        output["messages"][-1].pretty_print()  # output contains all messages in state
+        # output = app.invoke({"messages": input_messages}, config)
+        # output["messages"][-1].pretty_print()  # output contains all messages in state
+
+        for message, metadata in app.stream(
+            {"messages": input_messages},
+            config,
+            stream_mode="messages",
+        ):
+            if metadata["langgraph_node"] == "model":
+                print(message.content, end="|")
 
     # Logging the states, to understand workflow!
     state = app.get_state(config)

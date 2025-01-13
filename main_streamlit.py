@@ -92,9 +92,17 @@ if convo_id and (prompt := st.chat_input("What's on your mind?")):
 
     with st.chat_message("assistant", avatar=st.session_state.avatars["assistant"]):
         config["thread_id"] = f"darkdk123_conv_{convo_id}"
-        output = app.invoke({"messages": [prompt]}, config)
-        st.markdown(response := output["messages"][-1].content)
 
+        def stream(output):
+            for message, metadata in output:
+                if metadata["langgraph_node"] == "model":
+                    yield message.content
+
+        response = st.write_stream(
+            stream(app.stream({"messages": [prompt]}, config, stream_mode="messages"))
+        )
+
+        # st.markdown(response := output["messages"][-1].content)
     st.session_state.conversations[convo_id]["messages"].append({
         "role": "assistant",
         "content": response,

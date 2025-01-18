@@ -17,6 +17,8 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 from dotenv import load_dotenv
 import os
+# import langchain
+# langchain.debug = True
 
 # Load environment variables
 load_dotenv()
@@ -33,7 +35,7 @@ MODEL_REPO_ID = os.getenv("MODEL_REPO_ID")
 # )
 
 # model = ChatHuggingFace(llm=llm)
-model = ChatGroq(api_key=GROQ_API_KEY)
+model = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_REPO_ID)
 
 print("Initialized LOADING MODEL!!")
 
@@ -90,7 +92,11 @@ if __name__ == "__main__":
             stream_mode="messages",
         ):
             if metadata["langgraph_node"] == "model":
-                print(message.content, end="|")
+                if message.response_metadata.get("finish_reason", None) == "stop":
+                    # Streaming done!
+                    print(message.content, " >>> END")
+                    break
+                print(message.content, end=" | ")
 
     # Logging the states, to understand workflow!
     state = app.get_state(config)

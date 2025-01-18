@@ -96,6 +96,13 @@ if convo_id and (prompt := st.chat_input("What's on your mind?")):
         def stream(output):
             for message, metadata in output:
                 if metadata["langgraph_node"] == "model":
+                    # print("🏁🏁🏁", message, metadata, "🏁🏁🏁") 
+                    
+                    if message.response_metadata.get("finish_reason", None) == "stop": 
+                        # Streaming done!
+                        yield message.content
+                        break
+                
                     yield message.content
 
         response = st.write_stream(

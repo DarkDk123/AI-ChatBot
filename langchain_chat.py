@@ -9,14 +9,22 @@ It shows practical usage of memory and chat contexts. Currently for single user!
 # ________Imports___________
 
 # from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import StateGraph, MessagesState, START, END
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_groq import ChatGroq
-from langgraph.graph import START, END, MessagesState, StateGraph
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langgraph.checkpoint.memory import MemorySaver
 
-from dotenv import load_dotenv
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import AIMessageChunk, AnyMessage
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
+
+
 import os
+import asyncio
+from dotenv import load_dotenv
+
+
 # import langchain
 # langchain.debug = True
 
@@ -25,8 +33,8 @@ load_dotenv()
 
 # Initialize the language model
 # HF_TOKEN = os.getenv("HF_TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-MODEL_REPO_ID = os.getenv("MODEL_REPO_ID")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+MODEL_REPO_ID = os.getenv("MODEL_REPO_ID", "")
 
 # llm = HuggingFaceEndpoint(
 #     repo_id=MODEL_REPO_ID,
@@ -35,46 +43,64 @@ MODEL_REPO_ID = os.getenv("MODEL_REPO_ID")
 # )
 
 # model = ChatHuggingFace(llm=llm)
-model = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_REPO_ID)
+model = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_REPO_ID)  # type: ignore
 
 print("Initialized LOADING MODEL!!")
 
 
-# Define a new graph
-# With built-in MessagesState
-workflow = StateGraph(state_schema=MessagesState)
+class ImpersonateAgent:
+    def __init__(self, model: BaseChatModel, system: str = ""):
+        """Initializes the ChatBot"""
+
+        self.model = model
+        self.system = (
+            system
+            or "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does, use concise answers."
+        )
+
+        self.init_graph()
+
+    def init_graph(self):
+        """Compiles the ChatBot graph with built-in MessagesState"""
+
+        builder = StateGraph(state_schema=MessagesState)
+        # Define the (single) node in the graph
+        builder.add_edge(START, "model")
+        builder.add_node("model", self.call_model)
+        builder.add_edge("model", END)
+
+        # Compiling with MemorySaver
+        memory = MemorySaver()
+        self.graph = builder.compile(checkpointer=memory)
+
+    async def call_model(self, state: MessagesState):
+        response = self.model.astream(
+            input=await self._get_prompt(state["messages"]),
+        )
+
+        async for token in response:
+            yield {"messages": [AIMessageChunk(content=token.content)]}
+
+    async def _get_prompt(self, messages: list[AnyMessage]):
+        prompt_template = ChatPromptTemplate.from_messages([
+            SystemMessage(self.system),
+            MessagesPlaceholder(variable_name="messages"),
+        ])
+
+        return await prompt_template.ainvoke({"messages": messages})
+
+    # def __call__(self, *args: Any, **kwds: Any) -> Any:
+    #     return self.graph(self, *args, **kwds)
 
 
-# Define the function that calls the model
-def call_model(state: MessagesState):
-    prompt_template = ChatPromptTemplate.from_messages([
-        SystemMessage(
-            "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does, use concise answers.",
-        ),
-        MessagesPlaceholder(variable_name="messages"),
-    ])
+config = RunnableConfig(
+    configurable={"thread_id": "darkdk123"},
+)
 
-    response = model.invoke(prompt_template.invoke(state))
-
-    return {"messages": [AIMessage(response.content)]}
+app = ImpersonateAgent(model).graph
 
 
-# Define the (single) node in the graph
-workflow.add_edge(START, "model")
-workflow.add_node("model", call_model)
-workflow.add_edge("model", END)
-
-# Add memory
-memory = MemorySaver()
-app = workflow.compile(checkpointer=memory)
-
-# Main running code!
-config = {"configurable": {"thread_id": "darkdk123"}}
-
-if __name__ == "__main__":
-    # Testing locally!
-    print("Chatbot is ready! Type 'exit' to stop.")
-
+async def main():
     while True:
         query = input("User >>> ")
 
@@ -86,17 +112,25 @@ if __name__ == "__main__":
         # output = app.invoke({"messages": input_messages}, config)
         # output["messages"][-1].pretty_print()  # output contains all messages in state
 
-        for message, metadata in app.stream(
+        async for message, metadata in app.astream(
             {"messages": input_messages},
             config,
             stream_mode="messages",
         ):
-            if metadata["langgraph_node"] == "model":
-                if message.response_metadata.get("finish_reason", None) == "stop":
-                    # Streaming done!
-                    print(message.content, " >>> END")
-                    break
-                print(message.content, end=" | ")
+            if isinstance(message, AIMessageChunk) and isinstance(metadata, dict):
+                if metadata["langgraph_node"] == "model":
+                    if message.response_metadata.get("finish_reason", None) == "stop":
+                        # Streaming done!
+                        print(message.content, " >>> END")
+                        break
+                    print(message.content, end=" | ")
+
+
+if __name__ == "__main__":
+    # Testing locally!
+    print("Chatbot is ready! Type 'exit' to stop.")
+
+    asyncio.run(main())
 
     # Logging the states, to understand workflow!
     state = app.get_state(config)

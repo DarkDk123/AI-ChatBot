@@ -117,13 +117,16 @@ async def main():
             config,
             stream_mode="messages",
         ):
-            if isinstance(message, AIMessageChunk) and isinstance(metadata, dict):
-                if metadata["langgraph_node"] == "model":
-                    if message.response_metadata.get("finish_reason", None) == "stop":
-                        # Streaming done!
-                        print(message.content, " >>> END")
-                        break
-                    print(message.content, end=" | ")
+            if (
+                isinstance(message, AIMessageChunk)
+                and isinstance(metadata, dict)
+                and metadata["langgraph_node"] == "model"
+            ):
+                if message.response_metadata.get("finish_reason", None) == "stop":
+                    # Streaming done!
+                    print(message.content, " >>> END")
+                    break
+                print(message.content, end=" | ")
 
 
 if __name__ == "__main__":

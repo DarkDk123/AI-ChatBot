@@ -6,9 +6,10 @@ This script is a simple, elegant Streamlit app that allows users to interact wit
 It allows **multiple conversation threads**, with independent messages context.
 """
 
-from langchain_chat import app, config, MODEL_REPO_ID
-from utils import suggest_title
+from langchain_chat import app, config, MODEL_REPO_ID, AIMessageChunk
 import streamlit as st
+
+from utils import suggest_title, to_sync_generator
 
 st.title("OSHO LLM ChatBot")
 with st.expander(label="Model Info...", icon="📕"):
@@ -26,7 +27,6 @@ if "avatars" not in st.session_state:
         "assistant": "./avatars/Osho_Rajneesh.jpg",  # Still, He is the true Master 🙏🏻
         "user": "./avatars/user.jpeg",
     }
-
 
 # Start new conversation
 if st.sidebar.button("Start New Conversation") or st.session_state.convo_id == 0:
@@ -55,7 +55,6 @@ if convo_ids:
 else:
     convo_id = None
 
-
 # Displaying conversation title
 if convo_id:
     conv_title = st.subheader(
@@ -77,39 +76,41 @@ if convo_id and (prompt := st.chat_input("What's on your mind?")):
         "content": prompt,
     })
 
-    # update conversation title
+    # Update conversation title
     if st.session_state.conversations[convo_id]["title"] == "Untitled Conversation":
-        conv_title.text = st.session_state.conversations[convo_id]["title"] = (
-            suggest_title(prompt)
-        )
+        suggestion = suggest_title(prompt)
+        st.session_state.conversations[convo_id]["title"] = suggestion
+        conv_title.title(suggestion)
 
     # Continue conversation
     with st.chat_message("user", avatar=st.session_state.avatars["user"]):
         st.markdown(prompt)
 
-    if not st.session_state.conversations[convo_id]["title"]:
-        conv_title.text = st.session_state.conversations[convo_id]["title"] = prompt
+    # if not st.session_state.conversations[convo_id]["title"]:
+    #     conv_title.text = st.session_state.conversations[convo_id]["title"] = prompt
 
     with st.chat_message("assistant", avatar=st.session_state.avatars["assistant"]):
-        config["thread_id"] = f"darkdk123_conv_{convo_id}"
+        config.get("configurable", {})["thread_id"] = f"darkdk123_conv_{convo_id}"
 
-        def stream(output):
-            for message, metadata in output:
-                if metadata["langgraph_node"] == "model":
-                    # print("🏁🏁🏁", message, metadata, "🏁🏁🏁") 
-                    
-                    if message.response_metadata.get("finish_reason", None) == "stop": 
+        async def stream():
+            async for message, metadata in app.astream(
+                {"messages": [prompt]}, config, stream_mode="messages"
+            ):
+                if (
+                    isinstance(message, AIMessageChunk)
+                    and isinstance(metadata, dict)
+                    and metadata["langgraph_node"] == "model"
+                ):
+                    if message.response_metadata.get("finish_reason", None) == "stop":
                         # Streaming done!
                         yield message.content
                         break
-                
                     yield message.content
 
-        response = st.write_stream(
-            stream(app.stream({"messages": [prompt]}, config, stream_mode="messages"))
-        )
+        # Run the async stream and display it using st.write_stream
+        response = st.write_stream(to_sync_generator(stream()))
 
-        # st.markdown(response := output["messages"][-1].content)
+    # Append the assistant's response to the conversation
     st.session_state.conversations[convo_id]["messages"].append({
         "role": "assistant",
         "content": response,

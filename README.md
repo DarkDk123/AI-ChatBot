@@ -21,7 +21,7 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 
 ## Components Used
 
-- 🐍[Python 3.8+](https://www.python.org/downloads/) - You know the beast 😇
+- 🐍[Python 3.10+](https://www.python.org/downloads/) - You know the beast 😇
   
 - 🦜⛓️ [LangChain](https://langchain.com/) (with [LangGraph](https://www.langchain.com/langgraph)) - Framework for LLM Applications development & orchestration.
   

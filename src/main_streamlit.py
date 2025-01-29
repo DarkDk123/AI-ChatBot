@@ -6,10 +6,12 @@ This script is a simple, elegant Streamlit app that allows users to interact wit
 It allows **multiple conversation threads**, with independent messages context.
 """
 
-from langchain_chat import app, config, MODEL_REPO_ID, AIMessageChunk
 import streamlit as st
 
+from langchain_chat import MODEL_REPO_ID, AIMessageChunk, app, config
 from utils import suggest_title, to_sync_generator
+
+AVATARS_PATH = "src/avatars/"
 
 st.title("OSHO LLM ChatBot")
 with st.expander(label="Model Info...", icon="📕"):
@@ -24,8 +26,8 @@ if "conversations" not in st.session_state:
 # Updating avatars
 if "avatars" not in st.session_state:
     st.session_state.avatars = {
-        "assistant": "./avatars/Osho_Rajneesh.jpg",  # Still, He is the true Master 🙏🏻
-        "user": "./avatars/user.jpeg",
+        "assistant": f"{AVATARS_PATH}/Osho_Rajneesh.jpg",  # Still, He is the true Master 🙏🏻
+        "user": f"{AVATARS_PATH}/user.jpeg",
     }
 
 # Start new conversation
@@ -56,6 +58,7 @@ else:
     convo_id = None
 
 # Displaying conversation title
+
 if convo_id:
     conv_title = st.subheader(
         f"**💬 {st.session_state.conversations[convo_id]['title']}**"
@@ -71,10 +74,12 @@ if convo_id:
 
 # User input and response
 if convo_id and (prompt := st.chat_input("What's on your mind?")):
-    st.session_state.conversations[convo_id]["messages"].append({
-        "role": "user",
-        "content": prompt,
-    })
+    st.session_state.conversations[convo_id]["messages"].append(
+        {
+            "role": "user",
+            "content": prompt,
+        }
+    )
 
     # Update conversation title
     if st.session_state.conversations[convo_id]["title"] == "Untitled Conversation":
@@ -111,7 +116,9 @@ if convo_id and (prompt := st.chat_input("What's on your mind?")):
         response = st.write_stream(to_sync_generator(stream()))
 
     # Append the assistant's response to the conversation
-    st.session_state.conversations[convo_id]["messages"].append({
-        "role": "assistant",
-        "content": response,
-    })
+    st.session_state.conversations[convo_id]["messages"].append(
+        {
+            "role": "assistant",
+            "content": response,
+        }
+    )

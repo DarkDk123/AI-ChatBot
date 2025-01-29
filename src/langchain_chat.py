@@ -8,22 +8,24 @@ It shows practical usage of memory and chat contexts. Currently for single user!
 
 # ________Imports___________
 
-# from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
-from langgraph.graph import StateGraph, MessagesState, START, END
+import asyncio
+import os
+
+from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import (
+    AIMessageChunk,
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+)
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnableConfig
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import MemorySaver
 
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.messages import AIMessageChunk, AnyMessage
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_core.runnables import RunnableConfig
-
-
-import os
-import asyncio
-from dotenv import load_dotenv
-
+# from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langgraph.graph import END, START, MessagesState, StateGraph
 
 # import langchain
 # langchain.debug = True
@@ -82,10 +84,12 @@ class ImpersonateAgent:
             yield {"messages": [AIMessageChunk(content=token.content)]}
 
     async def _get_prompt(self, messages: list[AnyMessage]):
-        prompt_template = ChatPromptTemplate.from_messages([
-            SystemMessage(self.system),
-            MessagesPlaceholder(variable_name="messages"),
-        ])
+        prompt_template = ChatPromptTemplate.from_messages(
+            [
+                SystemMessage(self.system),
+                MessagesPlaceholder(variable_name="messages"),
+            ]
+        )
 
         return await prompt_template.ainvoke({"messages": messages})
 

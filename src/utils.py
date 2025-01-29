@@ -5,9 +5,10 @@ utils.py
 It contains some utility functions.
 """
 
-from langchain_chat import model
-from typing import AsyncGenerator
 import asyncio
+from typing import AsyncGenerator
+
+from langchain_chat import model
 
 
 def suggest_title(question: str):
@@ -32,7 +33,7 @@ def to_sync_generator(async_gen: AsyncGenerator):
     try:
         while True:
             try:
-                chunk = loop.run_until_complete(anext(async_gen))
+                chunk = loop.run_until_complete(anext(async_gen))  # noqa: F821
                 # print(chunk)
                 yield chunk
             except StopAsyncIteration:

@@ -15,7 +15,7 @@ AVATARS_PATH = "src/avatars/"
 
 st.title("OSHO LLM ChatBot")
 with st.expander(label="Model Info...", icon="📕"):
-    st.write(f"Model used is `{MODEL_REPO_ID}` available on HuggingFace")
+    st.write(f"Model used is `{MODEL_REPO_ID}` available")
 
 # Updates session state variables
 if "conversations" not in st.session_state:
@@ -85,7 +85,7 @@ if convo_id and (prompt := st.chat_input("What's on your mind?")):
     if st.session_state.conversations[convo_id]["title"] == "Untitled Conversation":
         suggestion = suggest_title(prompt)
         st.session_state.conversations[convo_id]["title"] = suggestion
-        conv_title.title(suggestion)
+        conv_title.title(suggestion)  # type: ignore
 
     # Continue conversation
     with st.chat_message("user", avatar=st.session_state.avatars["user"]):

@@ -51,7 +51,7 @@ It currently uses ***in-memory*** storage, so volatile for single run!
    ```
 
 4. **Configure environment variables**:
-   Create a `.env` file and add your HuggingFace token and model ID. (see [`example.env`](./example.env))
+   Create a `.env` file and add your HuggingFace token and model ID. (see [`.env.example`](.env.example))
 5. **Run the Streamlit app**:
    ```bash
    streamlit run main_streamlit.py

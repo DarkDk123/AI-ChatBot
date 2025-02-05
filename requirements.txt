@@ -5,7 +5,7 @@ uv==0.5.5
 
 langchain==0.3.9
 langgraph==0.2.53
-langchain-huggingface==0.1.2
+langchain-groq==0.2.3
 streamlit==1.40.2
 
 python-dotenv==1.0.1

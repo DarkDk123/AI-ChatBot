@@ -1,9 +1,7 @@
-# TODO: Will design in `microservices architecture`, so will remove requirements from root.
-
 # Required Main packages. [Without dependencies]
 
-pip==24.3.1
-uv==0.5.5
+# pip==24.3.1
+# uv==0.5.5
 
 # Core dependencies
 langchain==0.3.9
@@ -12,7 +10,7 @@ langchain-groq==0.2.3
 streamlit==1.40.2
 
 # Database 
-psycopg==3.2.4
+psycopg[binary]==3.2.4
 psycopg-pool==3.2.5
 langgraph-checkpoint-postgres==2.0.0
 
@@ -22,3 +20,5 @@ uvicorn==0.34.0
 
 # Others
 python-dotenv==1.0.1
+uuid==1.30
+bleach==6.2.0

@@ -7,8 +7,7 @@ It allows **multiple conversation threads**, with independent messages context.
 """
 
 import streamlit as st
-
-from langchain_chat import MODEL_REPO_ID, AIMessageChunk, app, config
+from langgraph_chat import MODEL_REPO_ID, AIMessageChunk, app, config
 from utils import suggest_title, to_sync_generator
 
 AVATARS_PATH = "src/avatars/"
@@ -85,7 +84,7 @@ if convo_id and (prompt := st.chat_input("What's on your mind?")):
     if st.session_state.conversations[convo_id]["title"] == "Untitled Conversation":
         suggestion = suggest_title(prompt)
         st.session_state.conversations[convo_id]["title"] = suggestion
-        conv_title.title(suggestion)  # type: ignore
+        conv_title.title(suggestion)  # type:ignore
 
     # Continue conversation
     with st.chat_message("user", avatar=st.session_state.avatars["user"]):

@@ -22,10 +22,11 @@ from langchain_core.messages import (
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnableConfig
 from langchain_groq import ChatGroq
-from langgraph.checkpoint.memory import MemorySaver
 
 # from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langgraph.graph import END, START, MessagesState, StateGraph
+
+from src.agent.utils import get_checkpointer
 
 # import langchain
 # langchain.debug = True
@@ -45,7 +46,7 @@ MODEL_REPO_ID = os.getenv("MODEL_REPO_ID", "")
 # )
 
 # model = ChatHuggingFace(llm=llm)
-model = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_REPO_ID)  # type: ignore
+model = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_REPO_ID)  # type:ignore
 
 print("Initialized LOADING MODEL!!")
 
@@ -72,8 +73,8 @@ class ImpersonateAgent:
         builder.add_edge("model", END)
 
         # Compiling with MemorySaver
-        memory = MemorySaver()
-        self.graph = builder.compile(checkpointer=memory)
+        # memory = MemorySaver()
+        self.graph = builder.compile(await get_checkpointer()[0])
 
     async def call_model(self, state: MessagesState):
         response = self.model.astream(
@@ -131,6 +132,7 @@ async def main():
                     print(message.content, " >>> END")
                     break
                 print(message.content, end=" | ")
+                # print(input_messages)
 
 
 if __name__ == "__main__":

@@ -9,9 +9,7 @@ It shows practical usage of memory and chat contexts. Currently for single user!
 # ________Imports___________
 
 import asyncio
-import os
 
-from dotenv import load_dotenv
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import (
     AIMessageChunk,
@@ -21,23 +19,21 @@ from langchain_core.messages import (
 )
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnableConfig
-from langchain_groq import ChatGroq
 
 # from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langgraph.graph import END, START, MessagesState, StateGraph
 
-from src.chatbot.utils import get_checkpointer
+from src.chatbot.utils import get_checkpointer, get_llm
 
 # import langchain
 # langchain.debug = True
 
+# TODO: Remove this after testing.
 # Load environment variables
-load_dotenv()
+# load_dotenv() # Not required as using docker.
 
 # Initialize the language model
 # HF_TOKEN = os.getenv("HF_TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-MODEL_REPO_ID = os.getenv("MODEL_REPO_ID", "")
 
 # llm = HuggingFaceEndpoint(
 #     repo_id=MODEL_REPO_ID,
@@ -45,8 +41,6 @@ MODEL_REPO_ID = os.getenv("MODEL_REPO_ID", "")
 #     max_new_tokens=4000,
 # )
 
-# model = ChatHuggingFace(llm=llm)
-model = ChatGroq(api_key=GROQ_API_KEY, model=MODEL_REPO_ID)  # type:ignore
 
 print("Initialized LOADING MODEL!!")
 
@@ -56,25 +50,26 @@ class ImpersonateAgent:
         """Initializes the ChatBot"""
 
         self.model = model
+        self.graph = None
         self.system = (
             system
             or "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does, use concise answers."
         )
 
-        self.init_graph()
-
-    def init_graph(self):
+    async def init_graph(self):
         """Compiles the ChatBot graph with built-in MessagesState"""
+        if not self.graph:
+            builder = StateGraph(state_schema=MessagesState)
+            # Define the (single) node in the graph
+            builder.add_edge(START, "model")
+            builder.add_node("model", self.call_model)
+            builder.add_edge("model", END)
 
-        builder = StateGraph(state_schema=MessagesState)
-        # Define the (single) node in the graph
-        builder.add_edge(START, "model")
-        builder.add_node("model", self.call_model)
-        builder.add_edge("model", END)
+            # Could use MemorySaver in development.
+            # memory = MemorySaver()
+            self.graph = builder.compile((await get_checkpointer())[0])
 
-        # Compiling with MemorySaver
-        # memory = MemorySaver()
-        self.graph = builder.compile(await get_checkpointer()[0])
+        return self.graph
 
     async def call_model(self, state: MessagesState):
         response = self.model.astream(
@@ -102,10 +97,10 @@ config = RunnableConfig(
     configurable={"thread_id": "darkdk123"},
 )
 
-app = ImpersonateAgent(model).graph
-
 
 async def main():
+    app = await ImpersonateAgent(get_llm()).init_graph()
+
     while True:
         query = input("User >>> ")
 
@@ -134,12 +129,17 @@ async def main():
                 print(message.content, end=" | ")
                 # print(input_messages)
 
+    return app
+
 
 if __name__ == "__main__":
     # Testing locally!
     print("Chatbot is ready! Type 'exit' to stop.")
 
-    asyncio.run(main())
+    # Ensure to open the pg_pool used.
+    asyncio.run(get_checkpointer(open=True))
+
+    app = asyncio.run(main())
 
     # Logging the states, to understand workflow!
     state = app.get_state(config)

@@ -6,29 +6,42 @@ It contains some utility functions.
 """
 
 import asyncio
+import logging
 import os
-
-# from psycopg.rows import dict_row
+from functools import lru_cache
 from typing import AsyncGenerator, Optional
 
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessageChunk
 from langchain_core.runnables import RunnableConfig
+from langchain_groq import ChatGroq
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph.state import CompiledStateGraph
 from psycopg_pool import AsyncConnectionPool
 
-# from src.agent.langgraph_chat import model, app as graph
+logger = logging.getLogger(__name__)
 
 PG_CONNECTION_POOL: Optional[AsyncConnectionPool] = None
 
 
-# def suggest_title(question: str):
-#     """Suggests title for a conversation."""
+def suggest_title(question: str) -> str:
+    """Suggests title for a conversation."""
 
-#     return model.invoke(
-#         f"Suggest a max 3-4 word title for the given conversation start '{question}', \
-#                 Asked to a spiritual Chat Bot on Rajneesh OSHO."
-#     ).content
+    return str(
+        get_llm(temperature=0.5, max_tokens=10)
+        .invoke(
+            f"Suggest a max concise title for the given conversation start '{question}', \
+                Asked to a Impersonate Chat Bot on Rajneesh OSHO, the philosopher."
+        )
+        .content
+    )
+
+
+# Fetch LLM settings from environment variables
+LLM_MODEL_ENGINE = os.environ.get("LLM_MODEL_ENGINE", "groq")
+LLM_MODEL_NAME = os.environ.get("LLM_MODEL_NAME", "llama-3.1-8b-instant")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://api.groq.com/")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", None)
 
 
 def to_sync_generator(async_gen: AsyncGenerator):
@@ -63,11 +76,17 @@ def _create_async_pool() -> AsyncConnectionPool:
 
     host_port = os.environ.get("DATABASE_URL", "postgres:5432").split(":")
 
-    # Will this work with checkpointer??
-    # connection_kwargs = {
-    #     "prepare_threshold": 0,
-    #     "row_factory": dict_row,
-    # }
+    connection_kwargs = {
+        "prepare_threshold": 0,
+        # "row_factory": dict_row,
+        "autocommit": True,
+    }
+
+    logger.info("Creating async connection pool with the following settings:")
+    logger.info(f"Database User: {db_user}")
+    logger.info(f"Database Name: {db_name}")
+    logger.info(f"Host: {host_port[0]}")
+    logger.info(f"Port: {host_port[1]}")
 
     return AsyncConnectionPool(
         conninfo=f"""
@@ -80,7 +99,7 @@ def _create_async_pool() -> AsyncConnectionPool:
         """,
         min_size=2,
         max_size=5,
-        # connection_kwargs=connection_kwargs,
+        kwargs=connection_kwargs,
         open=False,
         # The default is going to change, so used False explicitly.
         # https://www.psycopg.org/psycopg3/docs/api/pool.html#the-connectionpool-class
@@ -92,14 +111,26 @@ def get_async_pool() -> AsyncConnectionPool:
     global PG_CONNECTION_POOL
 
     if not PG_CONNECTION_POOL:
+        logger.info("Async connection pool not found, creating a new one.")
         PG_CONNECTION_POOL = _create_async_pool()
+    else:
+        logger.info("Using existing async connection pool.")
     return PG_CONNECTION_POOL
 
 
-async def get_checkpointer() -> tuple:
+async def get_checkpointer(
+    open=False,
+) -> tuple[AsyncPostgresSaver, AsyncConnectionPool]:
     # Initialize PostgreSQL checkpointer
+    logger.info("Initializing PostgreSQL checkpointer")
     pool = get_async_pool()
+
+    if open:
+        await pool.open()
+
     checkpointer = AsyncPostgresSaver(pool)  # type:ignore
+
+    logger.info("Setting up PostgreSQL checkpointer")
     await checkpointer.setup()
     return checkpointer, pool
 
@@ -126,3 +157,45 @@ async def response_generator(
             #     print(message.content, " >>> END")
             #     break
             yield str(message.content + "\n\n")  # type:ignore
+
+
+@lru_cache()
+def get_llm(**kwargs) -> BaseChatModel:
+    """Create the LLM connection."""
+
+    if LLM_MODEL_ENGINE == "groq":
+        # Get the unused parameters
+        unused_params = [
+            key
+            for key in kwargs.keys()
+            if key not in ["temperature", "top_p", "max_tokens"]
+        ]
+
+        if unused_params:
+            logger.warning(
+                f"The following parameters from kwargs are not supported: {unused_params} for {LLM_MODEL_ENGINE}"
+            )
+
+        if LLM_BASE_URL:
+            logger.info(f"Using llm model {LLM_MODEL_NAME} hosted at {LLM_BASE_URL}")
+            return ChatGroq(
+                base_url=LLM_BASE_URL,
+                model=LLM_MODEL_NAME,
+                api_key=LLM_API_KEY,  # type:ignore
+                temperature=kwargs.get("temperature", 0.7),
+                max_tokens=kwargs.get("max_tokens", None),
+                model_kwargs={"top_p": kwargs.get("top_p", 0.90)},
+            )
+        else:
+            logger.info(f"Using llm model {LLM_MODEL_NAME} from api catalog")
+            return ChatGroq(
+                model=LLM_MODEL_NAME,
+                api_key=LLM_API_KEY,  # type:ignore
+                temperature=kwargs.get("temperature", 0.7),
+                max_tokens=kwargs.get("max_tokens", None),
+                model_kwargs={"top_p": kwargs.get("top_p", 0.90)},
+            )
+    else:
+        raise RuntimeError(
+            "Unable to find any supported Large Language Model server. Supported engine name is groq."
+        )

@@ -26,7 +26,7 @@ from langchain_groq import ChatGroq
 # from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langgraph.graph import END, START, MessagesState, StateGraph
 
-from src.agent.utils import get_checkpointer
+from src.chatbot.utils import get_checkpointer
 
 # import langchain
 # langchain.debug = True

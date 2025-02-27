@@ -5,12 +5,12 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy the contents of the src/agent directory to the working directory
-COPY / /app/src/agent
+COPY / /app/src/chatbot
 
 # Install dependencies using uv
 RUN pip install uv && \
-    uv pip install -r src/agent/requirements.txt --system
+    uv pip install -r src/chatbot/requirements.txt --system
 
 # Set the default command to run the application
-CMD ["uvicorn", "src.agent.server:app", "--host", "0.0.0.0", "--port", "8501"]
+CMD ["uvicorn", "src.chatbot.server:app", "--host", "0.0.0.0", "--port", "8501"]
 

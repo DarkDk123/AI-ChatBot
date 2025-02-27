@@ -22,6 +22,7 @@ from langchain_core.runnables import RunnableConfig
 
 # from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from src.chatbot.utils import get_checkpointer, get_llm
 
@@ -96,6 +97,10 @@ class ImpersonateAgent:
 config = RunnableConfig(
     configurable={"thread_id": "darkdk123"},
 )
+
+
+async def compile_graph() -> CompiledStateGraph:
+    return await ImpersonateAgent(get_llm()).init_graph()
 
 
 async def main():

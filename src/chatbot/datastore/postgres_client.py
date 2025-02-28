@@ -133,8 +133,10 @@ class PostgresClient:
                         ),
                     )
                     await conn.commit()
+                    return True
         except Exception as e:
             print(f"Error storing conversation: {e}")
+            return False
             # TODO: Maybe this isn't required.
             # There may be multiples like this
             # await conn.rollback()

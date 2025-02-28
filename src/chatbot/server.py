@@ -94,7 +94,7 @@ def healthz():
         }
     },
 )
-async def create_thread() -> CreateThreadResponse:
+async def create_thread(user_id: str) -> CreateThreadResponse:
     """Create a new conversation thread."""
 
     # Try for fix number of time, if no unique session_id is found raise Error
@@ -106,12 +106,15 @@ async def create_thread() -> CreateThreadResponse:
             # Ensure session_id created does not exist in datastore (permanenet store like postgres)
             if not await datastore.is_valid_thread(session_id):
                 # Create a session on cache for validation
-                if session_manager.create_conversation_thread(session_id):
-                    await datastore.save_update_thread(
+                if session_manager.create_conversation_thread(session_id, user_id):
+                    if await datastore.save_update_thread(
                         thread_id=session_id,
                         **session_manager.get_thread_info(session_id),
+                    ):
+                        return CreateThreadResponse(session_id=session_id)
+                    raise HTTPException(
+                        status_code=500, detail="Unable to save session_id"
                     )
-                    return CreateThreadResponse(session_id=session_id)
 
     raise HTTPException(status_code=500, detail="Unable to generate session_id")
 
@@ -220,16 +223,16 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
                 prompt.session_id,
                 prompt.user_id or "",
                 [
-                    {
-                        "role": "user",
-                        "content": user_query,
-                        "timestamp": f"{user_query_timestamp}",
-                    },
-                    {
-                        "role": "assistant",
-                        "content": resp_str,
-                        "timestamp": f"{response_timestamp}",
-                    },
+                    Message(
+                        role="user",
+                        content=user_query,
+                        timestamp=f"{user_query_timestamp}",
+                    ).model_dump(),
+                    Message(
+                        role="assistant",
+                        content=resp_str,
+                        timestamp=f"{response_timestamp}",
+                    ).model_dump(),
                 ],
                 last_conversation_time=user_query_timestamp,
             )
@@ -239,16 +242,16 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
                 prompt.session_id,
                 prompt.user_id or "",
                 [
-                    {
-                        "role": "user",
-                        "content": user_query,
-                        "timestamp": f"{user_query_timestamp}",
-                    },
-                    {
-                        "role": "assistant",
-                        "content": resp_str,
-                        "timestamp": f"{response_timestamp}",
-                    },
+                    Message(
+                        role="user",
+                        content=user_query,
+                        timestamp=f"{user_query_timestamp}",
+                    ).model_dump(),
+                    Message(
+                        role="assistant",
+                        content=resp_str,
+                        timestamp=f"{response_timestamp}",
+                    ).model_dump(),
                 ],
                 last_conversation_time=user_query_timestamp,
             )

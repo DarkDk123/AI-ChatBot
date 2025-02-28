@@ -66,7 +66,7 @@ class Datastore:
                 last_conversation_time or time.time()
             ).strftime("%Y-%m-%d %H:%M:%S.%f")
 
-        await self.database.save_update_thread(
+        return await self.database.save_update_thread(
             thread_id,
             user_id,
             conversation_history,

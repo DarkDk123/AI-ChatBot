@@ -7,7 +7,6 @@ based on thread_id using redis.
 
 import json
 import os
-import time
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -59,8 +58,8 @@ class RedisClient:
         thread_id: str,
         user_id: str,
         conversation_history: List,
-        start_conversation_time: Optional[float],
-        last_conversation_time: Optional[float],
+        start_conversation_time: str,
+        last_conversation_time: str,
     ) -> bool:
         """Update conversation to Redis cache. Error if not exists"""
         if not self.is_thread(thread_id):
@@ -74,24 +73,14 @@ class RedisClient:
             existing_start = self.redis_client.get(start_time_key)
             self.redis_client.set(
                 start_time_key,
-                (
-                    datetime.fromtimestamp(start_conversation_time)
-                    if start_conversation_time is not None
-                    else (
-                        datetime.fromisoformat(existing_start)
-                        if existing_start
-                        else datetime.now()
-                    )
-                ).strftime("%Y-%m-%d %H:%M:%S.%f"),
+                start_conversation_time or str(existing_start),
                 ex=self.expiry,
             )
 
             # Last Conversation time
             self.redis_client.set(
                 last_time_key,
-                (
-                    datetime.fromtimestamp(last_conversation_time or time.time())
-                ).strftime("%Y-%m-%d %H:%M:%S.%f"),
+                last_conversation_time,
                 ex=self.expiry,
             )
             self.redis_client.set(f"{thread_id}:user_id", user_id, ex=self.expiry)
@@ -101,6 +90,7 @@ class RedisClient:
                 f"{thread_id}:conversation_history",
                 *[json.dumps(conv) for conv in conversation_history],
             )
+            self.redis_client.expire(f"{thread_id}:conversation_history", self.expiry)
 
             return True
         except redis.RedisError as e:
@@ -235,8 +225,8 @@ class RedisClient:
                 ex=self.expiry,
             )
 
-            pipeline.rpush(f"{thread_id}:conversation_history", *[])
-            pipeline.expire(f"{thread_id}:conversation_history", self.expiry)
+            # pipeline.rpush(f"{thread_id}:conversation_history", *[])
+            # pipeline.expire(f"{thread_id}:conversation_history", self.expiry)
 
             pipeline.set(f"{thread_id}:user_id", user_id, ex=self.expiry)
 
@@ -254,4 +244,5 @@ class RedisClient:
             return False
 
         self.redis_client.rpush(f"{thread_id}:conversation_history", *messages)
+        self.redis_client.expire(f"{thread_id}:conversation_history", self.expiry)
         return True

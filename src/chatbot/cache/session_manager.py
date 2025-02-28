@@ -7,6 +7,7 @@ based on a thread_id.
 
 import os
 import time
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from src.chatbot.cache.local_cache import LocalCache
@@ -63,16 +64,42 @@ class SessionManager:
         thread_id: str,
         user_id: str,
         conversation_history: List,
-        start_conversation_time: Optional[float] = None,
-        last_conversation_time: Optional[float] = None,
+        start_conversation_time: Optional[float | str] = None,
+        last_conversation_time: Optional[float | str] = None,
     ) -> bool:
         """Save conversation to the given thread_id."""
+
+        # Validate from str if required
+        if isinstance(start_conversation_time, str):
+            try:
+                datetime.fromisoformat(start_conversation_time)
+            except ValueError:
+                raise ValueError(
+                    "Start conversation time must be in valid ISO format string."
+                )
+        else:
+            start_conversation_time = datetime.fromtimestamp(
+                start_conversation_time or time.time()
+            ).strftime("%Y-%m-%d %H:%M:%S.%f")
+
+        if isinstance(last_conversation_time, str):
+            try:
+                datetime.fromisoformat(last_conversation_time)
+            except ValueError:
+                raise ValueError(
+                    "Last conversation time must be in valid ISO format string."
+                )
+        else:
+            last_conversation_time = datetime.fromtimestamp(
+                last_conversation_time or time.time()
+            ).strftime("%Y-%m-%d %H:%M:%S.%f")
+
         return self.memory.update_conversation_thread(
             thread_id,
             user_id,
             conversation_history,
             start_conversation_time,
-            last_conversation_time or time.time(),
+            last_conversation_time,
         )
 
     def is_valid_thread(self, thread_id: str) -> bool:

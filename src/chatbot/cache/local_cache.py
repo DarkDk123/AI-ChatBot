@@ -6,7 +6,7 @@ based on thread_id using python dict
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class LocalCache:
@@ -21,10 +21,10 @@ class LocalCache:
     def update_conversation_thread(
         self,
         thread_id: str,
-        user_id: Optional[str],
+        user_id: str,
         conversation_history: List,
-        start_conversation_time: Optional[float],
-        last_conversation_time: Optional[float],
+        start_conversation_time: str,
+        last_conversation_time: str,
     ) -> bool:
         """Update conversation in `in-memory` cache. Error if not exists"""
         try:
@@ -41,21 +41,8 @@ class LocalCache:
                         "conversation_history", []
                     )
                     + conversation_history,
-                    "start_conversation_time": (
-                        datetime.fromtimestamp(start_conversation_time).strftime(
-                            "%Y-%m-%d %H:%M:%S.%f"
-                        )
-                        if start_conversation_time is not None
-                        else self.cache_data.get(thread_id, {}).get(
-                            "start_conversation_time",
-                            datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-                        )
-                    ),
-                    "last_conversation_time": (
-                        datetime.fromtimestamp(
-                            last_conversation_time or datetime.now().timestamp()
-                        ).strftime("%Y-%m-%d %H:%M:%S.%f")
-                    ),
+                    "start_conversation_time": start_conversation_time,
+                    "last_conversation_time": last_conversation_time,
                 }
             )
             return True

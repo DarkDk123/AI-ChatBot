@@ -57,21 +57,18 @@ class Message(BaseModel):
 
     @field_validator("timestamp")
     def sanitize_timestamp(cls, v):
-        """Field validator function to santize given timestamp"""
+        """Field validator function to sanitize given timestamp"""
         if not isinstance(v, (str, float)):
-            raise ValueError("Timestamp must be a string or float.")
-        elif isinstance(v, float):
-            try:
-                v = datetime.fromtimestamp(v).strftime("%Y-%m-%d %H:%M:%S.%f")
-            except ValueError:
-                raise ValueError("Invalid timestamp format. [invalid-float]")
-
+            raise TypeError("Timestamp must be a string in ISO format or a float.")
+        elif (
+            isinstance(v, float) or v.replace(".", "", 1).isdigit()
+        ):  # Convert float timestamp to string
+            return datetime.fromtimestamp(float(v)).strftime("%Y-%m-%d %H:%M:%S.%f")
         elif isinstance(v, str):
             try:
-                v = datetime.fromisoformat(v)
+                return datetime.fromisoformat(v)
             except ValueError:
-                raise ValueError("Timestamp must be in valid ISO format string.")
-
+                raise ValueError("Timestamp must be a string in ISO format.")
         return v
 
 

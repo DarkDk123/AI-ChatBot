@@ -34,7 +34,7 @@ from src.chatbot.utils import get_async_pool
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", logging.INFO))
 logger = logging.getLogger(__name__)
-logger.info("Initializing procurement agent app...")
+logger.info("Initializing Chatbot API app...")
 
 # Initialize app
 session_manager: SessionManager
@@ -310,11 +310,7 @@ async def get_thread_info(thread_id):
 
         session_info = await datastore.get_thread_info(thread_id)
         if session_info:
-            session_manager.update_conversation_thread(
-                thread_id,
-                session_info["user_id"],
-                session_info["conversation_history"],
-            )
+            session_manager.update_conversation_thread(thread_id, **session_info)
 
         else:
             logger.info("No conversation found in session or database")
@@ -346,11 +342,10 @@ async def get_thread_info(thread_id):
 async def delete_thread(thread_id):
     """Delete conversation_thread from cache and database."""
     logger.info(f"Deleting conversation for {thread_id}")
-    session_info = session_manager.get_thread_info(thread_id)
-    datastore_session_info = await datastore.get_thread_info(thread_id)
-
-    if not session_info or not datastore_session_info:
-        logger.info("No conversation found in session")
+    session_info = session_manager.is_valid_thread(thread_id)
+    datastore_session_info = await datastore.is_valid_thread(thread_id)
+    if not session_info and not datastore_session_info:
+        logger.info("No conversation found in db")
         return DeleteThreadResponse(message="Session info not found")
 
     logger.info(f"Deleting conversation for {thread_id} from cache")
@@ -377,4 +372,4 @@ async def request_validation_exception_handler(
     )
 
 
-logger.info("Procurement-Agent service initialized...")
+logger.info("ChatBot-API service initialized...")

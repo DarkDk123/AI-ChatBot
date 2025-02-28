@@ -7,6 +7,7 @@ Uses one of :
 
 import os
 import time
+from datetime import datetime
 from typing import Optional
 
 from src.chatbot.datastore.postgres_client import PostgresClient
@@ -33,19 +34,44 @@ class Datastore:
     async def save_update_thread(
         self,
         thread_id: str,
-        user_id: Optional[str],
+        user_id: str,
         conversation_history: list,
-        start_conversation_time: Optional[float] = None,
-        last_conversation_time: Optional[float] = None,
+        start_conversation_time: Optional[float | str] = None,
+        last_conversation_time: Optional[float | str] = None,
     ):
         """Save or Update a conversation for the given details"""
+
+        # Validate from str if required
+        if isinstance(start_conversation_time, str):
+            try:
+                datetime.fromisoformat(start_conversation_time)
+            except ValueError:
+                raise ValueError(
+                    "Start conversation time must be in valid ISO format string."
+                )
+        else:
+            start_conversation_time = datetime.fromtimestamp(
+                start_conversation_time or time.time()
+            ).strftime("%Y-%m-%d %H:%M:%S.%f")
+
+        if isinstance(last_conversation_time, str):
+            try:
+                datetime.fromisoformat(last_conversation_time)
+            except ValueError:
+                raise ValueError(
+                    "Last conversation time must be in valid ISO format string."
+                )
+        else:
+            last_conversation_time = datetime.fromtimestamp(
+                last_conversation_time or time.time()
+            ).strftime("%Y-%m-%d %H:%M:%S.%f")
 
         await self.database.save_update_thread(
             thread_id,
             user_id,
             conversation_history,
             start_conversation_time,
-            last_conversation_time or time.time(),
+            last_conversation_time,
         )
 
     async def is_valid_thread(self, thread_id: str) -> bool:

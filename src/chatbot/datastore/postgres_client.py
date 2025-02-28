@@ -5,10 +5,7 @@ Manages conversation history with connection pooling and automatic table creatio
 This client utilizes `raw SQL` to perform it's operations.
 """
 
-import time
-
 # import asyncio
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from psycopg import sql
@@ -92,10 +89,10 @@ class PostgresClient:
     async def save_update_thread(
         self,
         thread_id: str,
-        user_id: Optional[str],
+        user_id: str,
         conversation_history: List[Dict],
-        start_conversation_time: Optional[float],
-        last_conversation_time: float,
+        start_conversation_time: str,
+        last_conversation_time: str,
     ):
         """
         Upsert conversation data using ON CONFLICT update.
@@ -121,6 +118,7 @@ class PostgresClient:
         """
         )
 
+        # Execute
         try:
             async with self.pool.connection() as conn:
                 async with conn.cursor() as cursor:
@@ -129,12 +127,8 @@ class PostgresClient:
                         (
                             thread_id,
                             user_id if user_id else None,
-                            datetime.fromtimestamp(  # Not so IMP
-                                start_conversation_time or time.time()
-                            ).strftime("%Y-%m-%d %H:%M:%S.%f"),
-                            datetime.fromtimestamp(
-                                last_conversation_time or time.time()
-                            ).strftime("%Y-%m-%d %H:%M:%S.%f"),
+                            start_conversation_time,
+                            last_conversation_time,
                             Json(conversation_history),
                         ),
                     )

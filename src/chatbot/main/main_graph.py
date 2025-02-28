@@ -100,7 +100,20 @@ config = RunnableConfig(
 
 
 async def compile_graph() -> CompiledStateGraph:
-    return await ImpersonateAgent(get_llm()).init_graph()
+    graph = await ImpersonateAgent(get_llm()).init_graph()
+
+    try:
+        # Generate the PNG image from the graph
+        png_image_data = graph.get_graph(xray=True).draw_mermaid_png()
+        # Save the image to a file in the current directory
+        with open("graph_image_mermaid.png", "wb") as f:
+            f.write(png_image_data)
+    except Exception as e:
+        # This requires some extra dependencies and is optional
+        # logger.info(f"An error occurred: {e}")
+        print(f"An error occurred while compiling the `agent graph`: {e}")
+
+    return graph
 
 
 async def main():

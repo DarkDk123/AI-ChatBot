@@ -21,16 +21,16 @@ from langchain_core.messages import (
 from langchain_core.runnables import RunnableConfig
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
-from src.chatbot.cache.session_manager import SessionManager
+from src.chatbot.cache.cache_manager import CacheManager
 from src.chatbot.datastore.datastore import Datastore
 from src.chatbot.main import CompiledStateGraph, get_agent
-from src.chatbot.schemas import (  # EndSessionResponse,; FeedbackResponse,
+from src.chatbot.schemas import (
     FALLBACK_RESPONSES,
     ChainResponse,
     ChainResponseChoices,
     CreateThreadResponse,
     DeleteThreadResponse,
-    GetSessionResponse,
+    GetThreadResponse,
     Message,
     Prompt,
     fallback_response_generator,
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 logger.info("Initializing Chatbot API app...")
 
 # Initialize app
-session_manager: SessionManager
+thread_manager: CacheManager
 datastore: Datastore
 agent: CompiledStateGraph
 
@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     """Lifespan of the FastAPI app."""
 
     # Load required resources
-    global session_manager
+    global thread_manager
     global datastore
     global agent
 
@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     await async_pool.open(wait=True)
     print("✌️ Connections got!!!")
 
-    session_manager = SessionManager()
+    thread_manager = CacheManager()
     datastore = Datastore()
     agent = await get_agent()
 
@@ -102,26 +102,26 @@ def healthz():
 async def create_thread(user_id: str) -> CreateThreadResponse:
     """Create a new conversation thread."""
 
-    # Try for fix number of time, if no unique session_id is found raise Error
+    # Try for fix number of time, if no unique thread_id is found raise Error
     for _ in range(5):
-        session_id = str(uuid4())
+        thread_id = str(uuid4())
 
-        # Ensure session_id created does not exist in cache
-        if not session_manager.is_valid_thread(session_id):
-            # Ensure session_id created does not exist in datastore (permanenet store like postgres)
-            if not await datastore.is_valid_thread(session_id):
-                # Create a session on cache for validation
-                if session_manager.create_conversation_thread(session_id, user_id):
+        # Ensure thread_id created does not exist in cache
+        if not thread_manager.is_valid_thread(thread_id):
+            # Ensure thread_id created does not exist in datastore (permanenet store like postgres)
+            if not await datastore.is_valid_thread(thread_id):
+                # Create a thread on cache for validation
+                if thread_manager.create_conversation_thread(thread_id, user_id):
                     if await datastore.save_update_thread(
-                        thread_id=session_id,
-                        **session_manager.get_thread_info(session_id),
+                        thread_id=thread_id,
+                        **thread_manager.get_thread_info(thread_id),
                     ):
-                        return CreateThreadResponse(session_id=session_id)
+                        return CreateThreadResponse(thread_id=thread_id)
                     raise HTTPException(
-                        status_code=500, detail="Unable to save session_id"
+                        status_code=500, detail="Unable to save thread_id"
                     )
 
-    raise HTTPException(status_code=500, detail="Unable to generate session_id")
+    raise HTTPException(status_code=500, detail="Unable to generate thread_id")
 
 
 @app.post(
@@ -148,9 +148,9 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
         user_query_timestamp = time.time()
 
         # Handle invalid thread id
-        if not session_manager.is_valid_thread(prompt.thread_id):
+        if not thread_manager.is_valid_thread(prompt.thread_id):
             if not await datastore.is_valid_thread(prompt.thread_id):
-                logger.info("No conversation found in Session or database")
+                logger.info("No conversation found in cache or database")
                 logger.error(
                     f"No thread_id created {prompt.thread_id}. Please create thread id before generate request."
                 )
@@ -158,17 +158,17 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
                 return StreamingResponse(
                     fallback_response_generator(
                         sentence=random.choice(FALLBACK_RESPONSES),
-                        session_id=prompt.thread_id,
+                        thread_id=prompt.thread_id,
                     ),
                     media_type="text/event-stream",
                 )
 
-            session_info = await datastore.get_thread_info(prompt.thread_id)
-            if session_info:
-                session_manager.update_conversation_thread(**session_info)
+            thread_info = await datastore.get_thread_info(prompt.thread_id)
+            if thread_info:
+                thread_manager.update_conversation_thread(**thread_info)
 
             else:
-                logger.info("No conversation found in session or database")
+                logger.info("No conversation found in cache or database")
                 raise HTTPException(404, detail="Invalid Thread info found!")
 
         chat_history = prompt.messages
@@ -199,7 +199,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             resp_id = str(uuid4())
             resp_str = ""
 
-            chain_response = ChainResponse(session_id=prompt.thread_id)
+            chain_response = ChainResponse(thread_id=prompt.thread_id)
             config = RunnableConfig(
                 configurable={"thread_id": prompt.thread_id},
             )
@@ -232,7 +232,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
 
                     yield str(chain_response.model_dump()) + "\n\n"
 
-                chain_response = ChainResponse(session_id=prompt.thread_id)
+                chain_response = ChainResponse(thread_id=prompt.thread_id)
             # Initialize content with space to overwrite default response
             response_choice = ChainResponseChoices(
                 index=0,
@@ -241,7 +241,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             )
 
             logger.info(
-                f"Conversation saved:\nSession ID: {prompt.thread_id}\nQuery: {last_user_message}\nResponse: {resp_str}"
+                f"Conversation saved:\nthread ID: {prompt.thread_id}\nQuery: {last_user_message}\nResponse: {resp_str}"
             )
             logger.info("Saving to both cache and pg database")
 
@@ -250,7 +250,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
 
             # Cache should fetch thread from db first. [Fetched above]
             # Update message in cache.
-            session_manager.update_thread_messages(
+            thread_manager.update_thread_messages(
                 prompt.thread_id,
                 # prompt.user_id or "",
                 [
@@ -288,9 +288,9 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             )
 
             chain_response.id = resp_id
-            # chain_response.session_id = prompt.session_id
             chain_response.choices.append(response_choice)
             logger.debug(response_choice)
+
             yield str(chain_response.model_dump()) + "\n\n"
 
         return StreamingResponse(response_generator(), media_type="text/event-stream")
@@ -303,7 +303,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
         print_exc()
         return StreamingResponse(
             fallback_response_generator(
-                sentence=random.choice(FALLBACK_RESPONSES), session_id=prompt.thread_id
+                sentence=random.choice(FALLBACK_RESPONSES), thread_id=prompt.thread_id
             ),
             media_type="text/event-stream",
         )
@@ -312,7 +312,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
         print_exc()
         return StreamingResponse(
             fallback_response_generator(
-                sentence=random.choice(FALLBACK_RESPONSES), session_id=prompt.thread_id
+                sentence=random.choice(FALLBACK_RESPONSES), thread_id=prompt.thread_id
             ),
             media_type="text/event-stream",
         )
@@ -322,7 +322,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
 @app.get(
     "/get_thread_info",
     tags=["Thread Management"],
-    response_model=GetSessionResponse,
+    response_model=GetThreadResponse,
     responses={
         500: {
             "description": "Internal Server Error",
@@ -337,24 +337,24 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
 async def get_thread_info(thread_id):
     """Get conversation_thread info from cache or database."""
     logger.info(f"Getting conversation for {thread_id}")
-    if not session_manager.is_valid_thread(thread_id):
+    if not thread_manager.is_valid_thread(thread_id):
         if not await datastore.is_valid_thread(thread_id):
-            logger.info("No conversation found in session or database")
-            raise HTTPException(404, detail="Session info not found")
+            logger.info("No conversation found in thread or database")
+            raise HTTPException(404, detail="Thread info not found")
 
-        session_info = await datastore.get_thread_info(thread_id)
-        if session_info:
-            session_manager.update_conversation_thread(**session_info)
+        thread_info = await datastore.get_thread_info(thread_id)
+        if thread_info:
+            thread_manager.update_conversation_thread(**thread_info)
 
         else:
-            logger.info("No conversation found in session or database")
-            raise HTTPException(404, detail="Invalid Session info found!")
+            logger.info("No conversation found in thread or database")
+            raise HTTPException(404, detail="Invalid thread info found!")
 
-    session_info = session_manager.get_thread_info(thread_id)
-    return GetSessionResponse(
-        session_id=thread_id,
-        user_id=session_info["user_id"],
-        conversation_history=session_info["conversation_history"],
+    thread_info = thread_manager.get_thread_info(thread_id)
+    return GetThreadResponse(
+        thread_id=thread_id,
+        user_id=thread_info["user_id"],
+        conversation_history=thread_info["conversation_history"],
     )
 
 
@@ -377,22 +377,22 @@ async def delete_thread(thread_id):
     """Delete conversation_thread from cache and database."""
     logger.info(f"Deleting conversation for {thread_id}")
 
-    session_info = session_manager.is_valid_thread(thread_id)
-    datastore_session_info = await datastore.is_valid_thread(thread_id)
+    thread_info = thread_manager.is_valid_thread(thread_id)
+    datastore_thread_info = await datastore.is_valid_thread(thread_id)
 
-    if not (session_info or datastore_session_info):
+    if not (thread_info or datastore_thread_info):
         logger.info("No conversation found in db")
-        return DeleteThreadResponse(message="Session info not found")
+        return DeleteThreadResponse(message="Thread info not found")
 
     logger.info(f"Deleting conversation for {thread_id} from cache")
-    session_manager.delete_conversation_thread(thread_id)
+    thread_manager.delete_conversation_thread(thread_id)
 
     logger.info(f"Deleting conversation for {thread_id} in database")
     await datastore.delete_conversation_thread(thread_id)
 
     logger.info(f"Deleting checkpointer for {thread_id}")
     await remove_state_from_checkpointer(thread_id)
-    return DeleteThreadResponse(message="Session info deleted")
+    return DeleteThreadResponse(message="Thread info deleted")
 
 
 # Other Exception handling

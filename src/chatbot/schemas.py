@@ -86,7 +86,7 @@ class Prompt(BaseModel):
     user_id: str = Field(description="A unique identifier representing your end-user.")
     thread_id: str = Field(
         ...,
-        description="A unique identifier representing the session associated with the response.",
+        description="A unique identifier representing the thread associated with the response.",
     )
 
 
@@ -104,8 +104,8 @@ class ChainResponse(BaseModel):
 
     id: str = Field(default="", max_length=100000, pattern=r"[\s\S]*")
     choices: List[ChainResponseChoices] = Field(default=[], max_length=256)
-    session_id: str = Field(
-        description="A unique identifier representing the session associated with the response.",
+    thread_id: str = Field(
+        description="A unique identifier representing the thread associated with the response.",
     )
 
 
@@ -165,7 +165,7 @@ class HealthResponse(BaseModel):
 
 
 class CreateThreadResponse(BaseModel):
-    session_id: str = Field(max_length=4096)
+    thread_id: str = Field(max_length=4096)
 
 
 class DeleteThreadResponse(BaseModel):
@@ -181,9 +181,9 @@ class FeedbackRequest(BaseModel):
         ge=-1.0,
         le=1.0,
     )
-    session_id: str = Field(
+    thread_id: str = Field(
         ...,
-        description="A unique identifier representing the session associated with the response.",
+        description="A unique identifier representing the thread associated with the response.",
     )
 
 
@@ -193,15 +193,15 @@ class FeedbackResponse(BaseModel):
     message: str = Field(max_length=4096, pattern=r"[\s\S]*", default="")
 
 
-class GetSessionResponse(BaseModel):
-    session_id: str
+class GetThreadResponse(BaseModel):
+    thread_id: str
     user_id: str
     conversation_history: List[Message]
     last_conversation_time: str = "None"
     start_conversation_time: str = "None"
 
 
-def fallback_response_generator(sentence: str, session_id: str = ""):
+def fallback_response_generator(sentence: str, thread_id: str = ""):
     """Mock response generator to simulate streaming predefined fallback responses."""
 
     # Simulate breaking the sentence into chunks (e.g., by word)
@@ -209,7 +209,7 @@ def fallback_response_generator(sentence: str, session_id: str = ""):
     resp_id = str(uuid4())  # unique response id for every query
     # Send each chunk (word) in the response
     for chunk in sentence_chunks:
-        chain_response = ChainResponse(session_id=session_id)
+        chain_response = ChainResponse(thread_id=thread_id)
         response_choice = ChainResponseChoices(
             index=0, message=Message(role="assistant", content=f"{chunk} ")
         )
@@ -218,7 +218,7 @@ def fallback_response_generator(sentence: str, session_id: str = ""):
         yield str(chain_response.model_dump()) + "\n\n"
 
     # End with [DONE] response
-    chain_response = ChainResponse(session_id=session_id)
+    chain_response = ChainResponse(thread_id=thread_id)
     response_choice = ChainResponseChoices(
         message=Message(role="assistant", content=" "), finish_reason="[DONE]"
     )

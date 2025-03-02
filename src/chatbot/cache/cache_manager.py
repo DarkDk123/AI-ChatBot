@@ -1,7 +1,7 @@
 """
-Session Manager utilizing an underlying cache manager.
+Cache Manager utilizing an underlying cache manager.
 
-Session Manager manages session info, conversation history
+Cache Manager manages message timings, conversation history
 based on a thread_id.
 """
 
@@ -14,9 +14,9 @@ from src.chatbot.cache.local_cache import LocalCache
 from src.chatbot.cache.redis_client import RedisClient
 
 
-class SessionManager:
+class CacheManager:
     """
-    Session Manager utilizing an underlying cache manager.
+    Cache Manager utilizing an underlying cache manager.
 
     Store the conversation between user and assistant, it's stored in format
 

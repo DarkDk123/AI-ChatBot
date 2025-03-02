@@ -195,7 +195,7 @@ class PostgresClient:
             # await conn.rollback()
 
     async def is_thread(self, thread_id: str) -> bool:
-        """Check if session exists"""
+        """Check if thread exists"""
         exists_sql = sql.SQL(
             """
             SELECT EXISTS(
@@ -213,7 +213,7 @@ class PostgresClient:
                     result = await cursor.fetchone()
                     return result[0] if result else False
         except Exception as e:
-            print(f"Error checking session existence: {e}")
+            print(f"Error checking thread existence: {e}")
             return False
 
     async def get_thread_messages(self, thread_id: str) -> Optional[List[Dict]]:

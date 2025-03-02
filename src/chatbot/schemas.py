@@ -34,6 +34,7 @@ class Message(BaseModel):
     )
 
     timestamp: str = Field(
+        # default="2025-02-28 19:59:04.992537", #type:ignore
         default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
         description="Message Timestamp",
     )
@@ -83,7 +84,7 @@ class Prompt(BaseModel):
     )
 
     user_id: str = Field(description="A unique identifier representing your end-user.")
-    session_id: str = Field(
+    thread_id: str = Field(
         ...,
         description="A unique identifier representing the session associated with the response.",
     )

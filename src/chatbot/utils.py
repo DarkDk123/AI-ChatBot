@@ -199,3 +199,26 @@ def get_llm(**kwargs) -> BaseChatModel:
         raise RuntimeError(
             "Unable to find any supported Large Language Model server. Supported engine name is groq."
         )
+
+
+async def remove_state_from_checkpointer(session_id):
+    async with get_async_pool().connection() as connection:
+        async with connection.cursor() as cursor:
+            try:
+                # Execute delete commands
+                await cursor.execute(
+                    "DELETE FROM checkpoint_blobs WHERE thread_id = %s", (session_id,)
+                )
+                await cursor.execute(
+                    "DELETE FROM checkpoint_writes WHERE thread_id = %s", (session_id,)
+                )
+                await cursor.execute(
+                    "DELETE FROM checkpoints WHERE thread_id = %s", (session_id,)
+                )
+
+                logger.info(f"Deleted Checkpointer rows with thread_id: {session_id}")
+
+            except Exception as e:
+                logger.info(
+                    f"Error occurred while deleting data from checkpointer: {e}"
+                )

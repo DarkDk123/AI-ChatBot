@@ -104,7 +104,7 @@ async def compile_graph() -> CompiledStateGraph:
 
     try:
         # Generate the PNG image from the graph
-        png_image_data = graph.get_graph(xray=True).draw_mermaid_png()
+        png_image_data = graph.get_graph().draw_mermaid_png()
         # Save the image to a file in the current directory
         with open("graph_image_mermaid.png", "wb") as f:
             f.write(png_image_data)

@@ -14,6 +14,11 @@ from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
+from langchain_core.messages import (
+    AIMessageChunk,
+    HumanMessage,
+)
+from langchain_core.runnables import RunnableConfig
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from src.chatbot.cache.session_manager import SessionManager
@@ -134,27 +139,40 @@ async def create_thread(user_id: str) -> CreateThreadResponse:
         }
     },
 )
-async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse:
+async def generate_answer(
+    request: Request, prompt: Prompt
+) -> StreamingResponse | HTTPException:
     """Generate and stream the response to the provided prompt."""
 
-    logger.info(f"Input at /generate endpoint of Agent: {prompt.dict()}")
+    logger.info(f"Input at /generate endpoint of Agent: {prompt.model_dump()}")
 
     try:
         user_query_timestamp = time.time()
 
-        # Handle invalid session id
-        if not session_manager.is_valid_thread(prompt.session_id):
-            logger.error(
-                f"No session_id created {prompt.session_id}. Please create session id before generate request."
-            )
-            print_exc()
-            return StreamingResponse(
-                fallback_response_generator(
-                    sentence=random.choice(FALLBACK_RESPONSES),
-                    session_id=prompt.session_id,
-                ),
-                media_type="text/event-stream",
-            )
+        # Handle invalid thread id
+        if not session_manager.is_valid_thread(prompt.thread_id):
+            if not await datastore.is_valid_thread(prompt.thread_id):
+                logger.info("No conversation found in Session or database")
+                logger.error(
+                    f"No thread_id created {prompt.thread_id}. Please create thread id before generate request."
+                )
+                print_exc()
+                return StreamingResponse(
+                    fallback_response_generator(
+                        sentence=random.choice(FALLBACK_RESPONSES),
+                        session_id=prompt.thread_id,
+                    ),
+                    media_type="text/event-stream",
+                )
+
+            session_info = await datastore.get_thread_info(prompt.thread_id)
+            if session_info:
+                session_manager.update_conversation_thread(**session_info)
+
+            else:
+                logger.info("No conversation found in session or database")
+                return HTTPException(404, detail="Invalid Session info found!")
+
         chat_history = prompt.messages
         # The last user message will be the query for the rag or llm chain
         last_user_message = next(
@@ -183,27 +201,40 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             resp_id = str(uuid4())
             resp_str = ""
 
-            chain_response = None
-            # Mock agent response
-            for content in fallback_response_generator(
-                sentence=random.choice(FALLBACK_RESPONSES), session_id=prompt.session_id
-            ):
-                resp_str += content
+            chain_response = ChainResponse(session_id=prompt.thread_id)
+            config = RunnableConfig(
+                configurable={"thread_id": prompt.thread_id},
+            )
 
-                if content:
-                    chain_response = ChainResponse(session_id=prompt.session_id)
+            input_messages = [HumanMessage(last_user_message)]
+            async for message, metadata in agent.astream(
+                {"messages": input_messages},
+                config,
+                stream_mode="messages",
+            ):
+                if (
+                    isinstance(message, AIMessageChunk)
+                    and isinstance(metadata, dict)
+                    and metadata["langgraph_node"] == "model"
+                ):
+                    if message.response_metadata.get("finish_reason", None) == "stop":
+                        # Streaming done!
+                        print(message.content, " >>> END")
+                        break
+                    print(message.content, end=" | ")
+                    # print(input_messages)
+
                     response_choice = ChainResponseChoices(
                         index=0,
-                        message=Message(role="assistant", content=content),
+                        message=Message(role="assistant", content=str(message.content)),
                     )
                     chain_response.id = resp_id
-                    chain_response.session_id = prompt.session_id
                     chain_response.choices.append(response_choice)
                     logger.debug(response_choice)
 
                     yield "data: " + str(chain_response.model_dump()) + "\n\n"
 
-                chain_response = ChainResponse(session_id=prompt.session_id)
+                chain_response = ChainResponse(session_id=prompt.thread_id)
             # Initialize content with space to overwrite default response
             response_choice = ChainResponseChoices(
                 index=0,
@@ -212,7 +243,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             )
 
             logger.info(
-                f"Conversation saved:\nSession ID: {prompt.session_id}\nQuery: {last_user_message}\nResponse: {resp_str}"
+                f"Conversation saved:\nSession ID: {prompt.thread_id}\nQuery: {last_user_message}\nResponse: {resp_str}"
             )
             logger.info("Saving to both cache and pg database")
 
@@ -220,7 +251,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             response_timestamp = time.time()
             # Cache should fetch thread from db first.
             session_manager.update_conversation_thread(
-                prompt.session_id,
+                prompt.thread_id,
                 prompt.user_id or "",
                 [
                     Message(
@@ -239,7 +270,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
 
             # Can go to FastAPI's Background process.
             await datastore.save_update_thread(
-                prompt.session_id,
+                prompt.thread_id,
                 prompt.user_id or "",
                 [
                     Message(
@@ -272,7 +303,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
         print_exc()
         return StreamingResponse(
             fallback_response_generator(
-                sentence=random.choice(FALLBACK_RESPONSES), session_id=prompt.session_id
+                sentence=random.choice(FALLBACK_RESPONSES), session_id=prompt.thread_id
             ),
             media_type="text/event-stream",
         )
@@ -281,7 +312,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
         print_exc()
         return StreamingResponse(
             fallback_response_generator(
-                sentence=random.choice(FALLBACK_RESPONSES), session_id=prompt.session_id
+                sentence=random.choice(FALLBACK_RESPONSES), session_id=prompt.thread_id
             ),
             media_type="text/event-stream",
         )
@@ -313,7 +344,7 @@ async def get_thread_info(thread_id):
 
         session_info = await datastore.get_thread_info(thread_id)
         if session_info:
-            session_manager.update_conversation_thread(thread_id, **session_info)
+            session_manager.update_conversation_thread(**session_info)
 
         else:
             logger.info("No conversation found in session or database")

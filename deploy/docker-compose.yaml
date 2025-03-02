@@ -23,7 +23,7 @@ services:
       REDIS_DB: "${REDIS_DB:-0}"
 
     ports:
-      - 8501:8501
+      - 8001:8001
     depends_on:
       - postgres
       - redis
@@ -68,9 +68,10 @@ services:
       - "9092:8081"
     environment:
       - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
 
 networks:
   default:
     name: ChatBot-Network
     driver: bridge
-

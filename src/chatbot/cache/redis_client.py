@@ -39,7 +39,11 @@ class RedisClient:
             f"{thread_id}:conversation_history", 0, -1
         )
 
-        return [json.loads(conv) for conv in conversation_history]
+        return (
+            [json.loads(conv) for conv in conversation_history]
+            if isinstance(conversation_history, list)
+            else []
+        )
 
     def get_k_messages(self, thread_id: str, k_turn: Optional[int] = None) -> List:
         """Retrieve the last k conversations from Redis."""
@@ -51,7 +55,11 @@ class RedisClient:
             f"{thread_id}:conversation_history", -k_turn, -1
         )
 
-        return [json.loads(conv) for conv in conversation_history]
+        return (
+            [json.loads(conv) for conv in conversation_history]
+            if isinstance(conversation_history, list)
+            else []
+        )
 
     def update_conversation_thread(
         self,
@@ -102,7 +110,7 @@ class RedisClient:
     def is_thread(self, thread_id: str) -> bool:
         """Check if thread_id already exist in cache."""
 
-        return self.redis_client.exists(f"{thread_id}:start_conversation_time")
+        return bool(self.redis_client.exists(f"{thread_id}:start_conversation_time"))
 
     def get_thread_info(self, thread_id: str) -> Dict:
         """Retrieve complete thread information from cache."""
@@ -111,9 +119,11 @@ class RedisClient:
         conversation_history = self.redis_client.lrange(
             f"{thread_id}:conversation_history", 0, -1
         )
-        resp["conversation_history"] = [
-            json.loads(conv) for conv in conversation_history
-        ]
+        resp["conversation_history"] = (
+            [json.loads(conv) for conv in conversation_history]
+            if isinstance(conversation_history, list)
+            else []
+        )
         resp["user_id"] = self.redis_client.get(f"{thread_id}:user_id")
         resp["last_conversation_time"] = self.redis_client.get(
             f"{thread_id}:last_conversation_time"
@@ -143,7 +153,7 @@ class RedisClient:
                 return False
 
             # Parse the last conversation, add feedback, and update in Redis
-            conv_data = json.loads(last_conv)
+            conv_data = json.loads(str(last_conv))
             conv_data["feedback"] = response_feedback
             updated_conv = json.dumps(conv_data)
 
@@ -243,6 +253,9 @@ class RedisClient:
             print(f"Thread {thread_id} not found in cache.")
             return False
 
-        self.redis_client.rpush(f"{thread_id}:conversation_history", *messages)
+        self.redis_client.rpush(
+            f"{thread_id}:conversation_history",
+            *[json.dumps(conv) for conv in messages],
+        )
         self.redis_client.expire(f"{thread_id}:conversation_history", self.expiry)
         return True

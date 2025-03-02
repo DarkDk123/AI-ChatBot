@@ -90,6 +90,7 @@ class Prompt(BaseModel):
     )
 
 
+# TODO: Some of the schemas aren't utilized, remove them.
 class ChainResponseChoices(BaseModel):
     """Definition of Chain response choices"""
 
@@ -214,7 +215,7 @@ def fallback_response_generator(sentence: str, session_id: str = ""):
         )
         chain_response.id = resp_id
         chain_response.choices.append(response_choice)
-        yield "data: " + str(chain_response.model_dump()) + "\n\n"
+        yield str(chain_response.model_dump()) + "\n\n"
 
     # End with [DONE] response
     chain_response = ChainResponse(session_id=session_id)
@@ -223,4 +224,4 @@ def fallback_response_generator(sentence: str, session_id: str = ""):
     )
     chain_response.id = resp_id
     chain_response.choices.append(response_choice)
-    yield "data: " + str(chain_response.model_dump()) + "\n\n"
+    yield str(chain_response.model_dump()) + "\n\n"

@@ -35,7 +35,7 @@ from src.chatbot.schemas import (  # EndSessionResponse,; FeedbackResponse,
     Prompt,
     fallback_response_generator,
 )
-from src.chatbot.utils import get_async_pool
+from src.chatbot.utils import get_async_pool, remove_state_from_checkpointer
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", logging.INFO))
 logger = logging.getLogger(__name__)
@@ -139,9 +139,7 @@ async def create_thread(user_id: str) -> CreateThreadResponse:
         }
     },
 )
-async def generate_answer(
-    request: Request, prompt: Prompt
-) -> StreamingResponse | HTTPException:
+async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse:
     """Generate and stream the response to the provided prompt."""
 
     logger.info(f"Input at /generate endpoint of Agent: {prompt.model_dump()}")
@@ -171,7 +169,7 @@ async def generate_answer(
 
             else:
                 logger.info("No conversation found in session or database")
-                return HTTPException(404, detail="Invalid Session info found!")
+                raise HTTPException(404, detail="Invalid Thread info found!")
 
         chat_history = prompt.messages
         # The last user message will be the query for the rag or llm chain
@@ -232,7 +230,7 @@ async def generate_answer(
                     chain_response.choices.append(response_choice)
                     logger.debug(response_choice)
 
-                    yield "data: " + str(chain_response.model_dump()) + "\n\n"
+                    yield str(chain_response.model_dump()) + "\n\n"
 
                 chain_response = ChainResponse(session_id=prompt.thread_id)
             # Initialize content with space to overwrite default response
@@ -249,10 +247,12 @@ async def generate_answer(
 
             # Saving to cache & Database
             response_timestamp = time.time()
-            # Cache should fetch thread from db first.
-            session_manager.update_conversation_thread(
+
+            # Cache should fetch thread from db first. [Fetched above]
+            # Update message in cache.
+            session_manager.update_thread_messages(
                 prompt.thread_id,
-                prompt.user_id or "",
+                # prompt.user_id or "",
                 [
                     Message(
                         role="user",
@@ -265,7 +265,7 @@ async def generate_answer(
                         timestamp=f"{response_timestamp}",
                     ).model_dump(),
                 ],
-                last_conversation_time=user_query_timestamp,
+                # last_conversation_time=user_query_timestamp,
             )
 
             # Can go to FastAPI's Background process.
@@ -291,7 +291,7 @@ async def generate_answer(
             # chain_response.session_id = prompt.session_id
             chain_response.choices.append(response_choice)
             logger.debug(response_choice)
-            yield "data: " + str(chain_response.model_dump()) + "\n\n"
+            yield str(chain_response.model_dump()) + "\n\n"
 
         return StreamingResponse(response_generator(), media_type="text/event-stream")
     # Catch any unhandled exceptions
@@ -340,7 +340,7 @@ async def get_thread_info(thread_id):
     if not session_manager.is_valid_thread(thread_id):
         if not await datastore.is_valid_thread(thread_id):
             logger.info("No conversation found in session or database")
-            return HTTPException(404, detail="Session info not found")
+            raise HTTPException(404, detail="Session info not found")
 
         session_info = await datastore.get_thread_info(thread_id)
         if session_info:
@@ -348,7 +348,7 @@ async def get_thread_info(thread_id):
 
         else:
             logger.info("No conversation found in session or database")
-            return HTTPException(404, detail="Invalid Session info found!")
+            raise HTTPException(404, detail="Invalid Session info found!")
 
     session_info = session_manager.get_thread_info(thread_id)
     return GetSessionResponse(
@@ -376,9 +376,11 @@ async def get_thread_info(thread_id):
 async def delete_thread(thread_id):
     """Delete conversation_thread from cache and database."""
     logger.info(f"Deleting conversation for {thread_id}")
+
     session_info = session_manager.is_valid_thread(thread_id)
     datastore_session_info = await datastore.is_valid_thread(thread_id)
-    if not session_info and not datastore_session_info:
+
+    if not (session_info or datastore_session_info):
         logger.info("No conversation found in db")
         return DeleteThreadResponse(message="Session info not found")
 
@@ -389,7 +391,7 @@ async def delete_thread(thread_id):
     await datastore.delete_conversation_thread(thread_id)
 
     logger.info(f"Deleting checkpointer for {thread_id}")
-    # remove_state_from_checkpointer(session_id)
+    await remove_state_from_checkpointer(thread_id)
     return DeleteThreadResponse(message="Session info deleted")
 
 

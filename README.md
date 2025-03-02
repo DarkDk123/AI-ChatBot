@@ -32,6 +32,10 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 
 ## How to Use Locally
 
+> [❌] Currently in development - **DO NOT TRY TO USE LOCALLY** - Won't work till I update the instructions.
+>
+> **! Working on Architectural changes.**
+
 1. **Clone the repository**:
    ```bash
    git clone https://github.com/DarkDk123/AI-ChatBot

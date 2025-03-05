@@ -4,6 +4,7 @@ services:
     build:
       context: ../src/chatbot/
       dockerfile: dockerfile
+    command: --port 8001 --host 0.0.0.0 --workers 2
     environment:
       # LLM ENVs
       LLM_MODEL_ENGINE: "${LLM_MODEL_ENGINE:-groq}"
@@ -42,7 +43,7 @@ services:
       - "-c"
       - "max_connections=200"
     volumes:
-      - /home/darklord/Downloads/bot_volumes/db-data:/var/lib/postgresql/data/
+      - "${DOCKER_VOLUME_DIRECTORY:-.}/bot_volumes/db-data:/var/lib/postgresql/data/"
     ports:
       - 5432:5432
     healthcheck:
@@ -59,7 +60,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - /home/darklord/Downloads/bot_volumes/redis-data:/data
+      - "${DOCKER_VOLUME_DIRECTORY:-.}/bot_volumes/redis-data:/data"
 
   redis-commander:
     image: rediscommander/redis-commander:latest

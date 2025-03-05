@@ -12,5 +12,5 @@ RUN pip install uv && \
     uv pip install -r src/chatbot/requirements.txt --system
 
 # Set the default command to run the application
-CMD ["uvicorn", "src.chatbot.server:app", "--host", "0.0.0.0", "--port", "8501"]
+ENTRYPOINT ["uvicorn", "src.chatbot.server:app"]
 

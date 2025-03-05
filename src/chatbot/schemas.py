@@ -1,5 +1,6 @@
 """Schema for the Agent Server."""
 
+import time
 from datetime import datetime
 from typing import Annotated, List
 from uuid import uuid4
@@ -50,7 +51,7 @@ class Message(BaseModel):
 
     @field_validator("content")
     def sanitize_content(cls, v):
-        """Field validator function to santize user populated feilds from HTML"""
+        """Field validator function to sanitize user populated fields from HTML"""
         v = bleach.clean(v, strip=True)
         if not v:  # Check for empty string
             raise ValueError("Message content cannot be empty.")
@@ -62,9 +63,11 @@ class Message(BaseModel):
         if not isinstance(v, (str, float)):
             raise TypeError("Timestamp must be a string in ISO format or a float.")
         elif (
-            isinstance(v, float) or v.replace(".", "", 1).isdigit()
+            isinstance(v, float) or v.replace(".", "", 1).isdigit() or v == "string"
         ):  # Convert float timestamp to string
-            return datetime.fromtimestamp(float(v)).strftime("%Y-%m-%d %H:%M:%S.%f")
+            return datetime.fromtimestamp(
+                float(v) if v != "string" else time.time()
+            ).strftime("%Y-%m-%d %H:%M:%S.%f")
         elif isinstance(v, str):
             try:
                 return datetime.fromisoformat(v)
@@ -90,11 +93,10 @@ class Prompt(BaseModel):
     )
 
 
-# TODO: Some of the schemas aren't utilized, remove them.
 class ChainResponseChoices(BaseModel):
     """Definition of Chain response choices"""
 
-    index: int = Field(default=0, ge=0, le=255)
+    index: int = Field(default=0, ge=0, le=256)
     message: Message = Field(default=Message())
     finish_reason: str = Field(default="", max_length=4096, pattern=r"[\s\S]*")
 
@@ -168,6 +170,10 @@ class CreateThreadResponse(BaseModel):
     thread_id: str = Field(max_length=4096)
 
 
+class EndThreadResponse(BaseModel):
+    message: str = Field(max_length=4096, pattern=r"[\s\S]*", default="")
+
+
 class DeleteThreadResponse(BaseModel):
     message: str = Field(max_length=4096, pattern=r"[\s\S]*", default="")
 
@@ -215,7 +221,7 @@ def fallback_response_generator(sentence: str, thread_id: str = ""):
         )
         chain_response.id = resp_id
         chain_response.choices.append(response_choice)
-        yield str(chain_response.model_dump()) + "\n\n"
+        yield "data: " + str(chain_response.model_dump()) + "\n\n"
 
     # End with [DONE] response
     chain_response = ChainResponse(thread_id=thread_id)
@@ -224,4 +230,4 @@ def fallback_response_generator(sentence: str, thread_id: str = ""):
     )
     chain_response.id = resp_id
     chain_response.choices.append(response_choice)
-    yield str(chain_response.model_dump()) + "\n\n"
+    yield "data: " + str(chain_response.model_dump()) + "\n\n"

@@ -81,7 +81,7 @@ class RedisClient:
             existing_start = self.redis_client.get(start_time_key)
             self.redis_client.set(
                 start_time_key,
-                start_conversation_time or str(existing_start),
+                str(existing_start) or start_conversation_time,
                 ex=self.expiry,
             )
 
@@ -94,11 +94,14 @@ class RedisClient:
             self.redis_client.set(f"{thread_id}:user_id", user_id, ex=self.expiry)
 
             # Add conversation history
-            self.redis_client.rpush(
-                f"{thread_id}:conversation_history",
-                *[json.dumps(conv) for conv in conversation_history],
-            )
-            self.redis_client.expire(f"{thread_id}:conversation_history", self.expiry)
+            if conversation_history:
+                self.redis_client.rpush(
+                    f"{thread_id}:conversation_history",
+                    *[json.dumps(conv) for conv in conversation_history],
+                )
+                self.redis_client.expire(
+                    f"{thread_id}:conversation_history", self.expiry
+                )
 
             return True
         except redis.RedisError as e:
@@ -109,7 +112,6 @@ class RedisClient:
 
     def is_thread(self, thread_id: str) -> bool:
         """Check if thread_id already exist in cache."""
-
         return bool(self.redis_client.exists(f"{thread_id}:start_conversation_time"))
 
     def get_thread_info(self, thread_id: str) -> Dict:
@@ -235,6 +237,7 @@ class RedisClient:
                 ex=self.expiry,
             )
 
+            # Would be created, when updated with real conv
             # pipeline.rpush(f"{thread_id}:conversation_history", *[])
             # pipeline.expire(f"{thread_id}:conversation_history", self.expiry)
 
@@ -245,17 +248,3 @@ class RedisClient:
         except Exception as e:
             print(f"Failed to create thread due to exception {e}")
             return False
-
-    def update_thread_messages(self, thread_id: str, messages: List):
-        """Update conversation in cache. Error if not exists"""
-
-        if not self.is_thread(thread_id):
-            print(f"Thread {thread_id} not found in cache.")
-            return False
-
-        self.redis_client.rpush(
-            f"{thread_id}:conversation_history",
-            *[json.dumps(conv) for conv in messages],
-        )
-        self.redis_client.expire(f"{thread_id}:conversation_history", self.expiry)
-        return True

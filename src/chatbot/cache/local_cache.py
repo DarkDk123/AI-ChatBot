@@ -30,6 +30,11 @@ class LocalCache:
         try:
             if not self.is_thread(thread_id):
                 self.create_conversation_thread(thread_id, user_id)
+
+            existing_start = self.cache_data.get(thread_id, {}).get(
+                "start_conversation_time", start_conversation_time
+            )
+
             self.cache_data[thread_id].update(
                 {
                     "user_id": (
@@ -41,7 +46,8 @@ class LocalCache:
                         "conversation_history", []
                     )
                     + conversation_history,
-                    "start_conversation_time": start_conversation_time,
+                    "start_conversation_time": existing_start
+                    or start_conversation_time,
                     "last_conversation_time": last_conversation_time,
                 }
             )
@@ -63,9 +69,11 @@ class LocalCache:
     def response_feedback(self, thread_id: str, response_feedback: float) -> bool:
         """Save given thread feedback in `in-memory` cache."""
         try:
-            thread = self.cache_data.get(thread_id, {})
-            conversation_history = thread.get("conversation_history", [])
+            thread = self.cache_data.get(thread_id)
+            if not thread:
+                return False
 
+            conversation_history = thread.get("conversation_history")
             if not conversation_history:
                 print(f"No conversation history found for thread {thread_id}")
                 return False
@@ -121,8 +129,3 @@ class LocalCache:
         if not self.is_thread(thread_id):
             print(f"Thread {thread_id} not found in cache.")
             return False
-
-        self.cache_data.get(thread_id, {}).get("conversation_history", []).extend(
-            messages
-        )
-        return True

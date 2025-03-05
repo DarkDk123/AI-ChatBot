@@ -5,7 +5,6 @@ Manages conversation history with connection pooling and automatic table creatio
 This client utilizes `raw SQL` to perform it's operations.
 """
 
-# import asyncio
 from typing import Dict, List, Optional
 
 from psycopg import sql
@@ -99,7 +98,7 @@ class PostgresClient:
 
         Needs conversation timings as datetime.
         """
-        # TODO: Potential buggy Query.
+        # TODO: Update required fields only.
 
         insert_sql = sql.SQL(
             """
@@ -137,9 +136,6 @@ class PostgresClient:
         except Exception as e:
             print(f"Error storing conversation: {e}")
             return False
-            # TODO: Maybe this isn't required.
-            # There may be multiples like this
-            # await conn.rollback()
 
     async def get_thread_info(self, thread_id: str) -> Optional[Dict]:
         """Retrieve conversation data by thread_id"""
@@ -166,8 +162,12 @@ class PostgresClient:
                         return {
                             "thread_id": result[0],
                             "user_id": result[1],
-                            "last_conversation_time": result[2],
-                            "start_conversation_time": result[3],
+                            "last_conversation_time": result[2].strftime(
+                                "%Y-%m-%d %H:%M:%S.%f"
+                            ),
+                            "start_conversation_time": result[3].strftime(
+                                "%Y-%m-%d %H:%M:%S.%f"
+                            ),
                             "conversation_history": result[4],
                         }
                     return None
@@ -236,25 +236,3 @@ class PostgresClient:
         except Exception as e:
             print(f"Error fetching messages: {e}")
             return None
-
-    async def update_thread_messages(self, thread_id: str, messages: List[Dict]):
-        """Update conversation messages by thread_id"""
-        update_sql = sql.SQL(
-            """
-            UPDATE conversation_history
-            SET conversation_data = conversation_data || %s::jsonb
-            WHERE thread_id = %s
-        """
-        )
-
-        if not self.is_thread(thread_id):
-            raise KeyError(f"Thread {thread_id} not found in database.")
-
-        try:
-            async with self.pool.connection() as conn:
-                async with conn.cursor() as cursor:
-                    await cursor.execute(update_sql, (Json(messages), thread_id))
-                    await conn.commit()
-        except Exception as e:
-            print(f"Error updating messages: {e}")
-            # await conn.rollback()

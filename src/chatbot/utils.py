@@ -76,6 +76,7 @@ def _create_async_pool() -> AsyncConnectionPool:
 
     host_port = os.environ.get("DATABASE_URL", "postgres:5432").split(":")
 
+    # Will this work with checkpointer??
     connection_kwargs = {
         "prepare_threshold": 0,
         # "row_factory": dict_row,
@@ -196,12 +197,12 @@ def get_llm(**kwargs) -> BaseChatModel:
                 model_kwargs={"top_p": kwargs.get("top_p", 0.90)},
             )
     else:
-        raise RuntimeError(
-            "Unable to find any supported Large Language Model server. Supported engine name is groq."
-        )
+        raise ValueError("Only inmemory and postgres is supported chckpointer type")
 
 
 async def remove_state_from_checkpointer(thread_id):
+    """Remove state from postgres checkpointer."""
+
     async with get_async_pool().connection() as connection:
         async with connection.cursor() as cursor:
             try:

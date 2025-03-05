@@ -125,7 +125,3 @@ class CacheManager:
     def get_thread_messages(self, thread_id: str):
         """Retrieve the entire conversation history from cache as a list."""
         return self.memory.get_messages(thread_id)
-
-    def update_thread_messages(self, thread_id: str, messages: List):
-        """Update conversation in cache. Error if not exists"""
-        return self.memory.update_thread_messages(thread_id, messages)

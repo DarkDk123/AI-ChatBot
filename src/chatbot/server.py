@@ -83,7 +83,6 @@ def healthz():
     return {"status": "ok", "message": "ChatBot API service is healthy"}
 
 
-# Other db testing routes
 @app.get(
     "/create_thread",
     tags=["Thread Management"],
@@ -152,7 +151,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             if not await datastore.is_valid_thread(prompt.thread_id):
                 logger.info("No conversation found in cache or database")
                 logger.error(
-                    f"No thread_id created {prompt.thread_id}. Please create thread id before generate request."
+                    f"No thread_id found in database for {prompt.thread_id}. Please create thread id before generate request."
                 )
                 print_exc()
                 return StreamingResponse(
@@ -184,7 +183,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
 
         # Normalize the last user input and remove non-ascii characters
         last_user_message = re.sub(
-            r"[^\x00-\x7F]+", "", str(last_user_message)
+            r"[^\x00-\x7F]+", "", last_user_message
         )  # Remove all non-ascii characters
         last_user_message = re.sub(
             r"[\u2122\u00AE]", "", last_user_message
@@ -226,13 +225,15 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
                         index=0,
                         message=Message(role="assistant", content=str(message.content)),
                     )
+
                     chain_response.id = resp_id
                     chain_response.choices.append(response_choice)
                     logger.debug(response_choice)
 
-                    yield str(chain_response.model_dump()) + "\n\n"
+                    yield "data: " + str(chain_response.model_dump()) + "\n\n"
 
                 chain_response = ChainResponse(thread_id=prompt.thread_id)
+
             # Initialize content with space to overwrite default response
             response_choice = ChainResponseChoices(
                 index=0,
@@ -241,18 +242,17 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             )
 
             logger.info(
-                f"Conversation saved:\nthread ID: {prompt.thread_id}\nQuery: {last_user_message}\nResponse: {resp_str}"
+                f"Conversation saved:\nThread ID: {prompt.thread_id}\nQuery: {last_user_message}\nResponse: {resp_str}"
             )
             logger.info("Saving to both cache and pg database")
 
             # Saving to cache & Database
             response_timestamp = time.time()
 
-            # Cache should fetch thread from db first. [Fetched above]
-            # Update message in cache.
-            thread_manager.update_thread_messages(
+            # Cache should fetch thread from db first. (Fetched above)
+            thread_manager.update_conversation_thread(
                 prompt.thread_id,
-                # prompt.user_id or "",
+                prompt.user_id or "default",
                 [
                     Message(
                         role="user",
@@ -265,13 +265,13 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
                         timestamp=f"{response_timestamp}",
                     ).model_dump(),
                 ],
-                # last_conversation_time=user_query_timestamp,
+                last_conversation_time=user_query_timestamp,
             )
 
-            # Can go to FastAPI's Background process.
+            # Can go to FastAPI's Background process. [for low latency]
             await datastore.save_update_thread(
                 prompt.thread_id,
-                prompt.user_id or "",
+                prompt.user_id or "default",
                 [
                     Message(
                         role="user",
@@ -291,7 +291,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             chain_response.choices.append(response_choice)
             logger.debug(response_choice)
 
-            yield str(chain_response.model_dump()) + "\n\n"
+            yield "data: " + str(chain_response.model_dump()) + "\n\n"
 
         return StreamingResponse(response_generator(), media_type="text/event-stream")
     # Catch any unhandled exceptions
@@ -351,6 +351,8 @@ async def get_thread_info(thread_id):
             raise HTTPException(404, detail="Invalid thread info found!")
 
     thread_info = thread_manager.get_thread_info(thread_id)
+    logger.info(f"Get Thread info: {thread_info}")
+
     return GetThreadResponse(
         thread_id=thread_id,
         user_id=thread_info["user_id"],
@@ -375,6 +377,7 @@ async def get_thread_info(thread_id):
 )
 async def delete_thread(thread_id):
     """Delete conversation_thread from cache and database."""
+
     logger.info(f"Deleting conversation for {thread_id}")
 
     thread_info = thread_manager.is_valid_thread(thread_id)
@@ -392,10 +395,11 @@ async def delete_thread(thread_id):
 
     logger.info(f"Deleting checkpointer for {thread_id}")
     await remove_state_from_checkpointer(thread_id)
+
     return DeleteThreadResponse(message="Thread info deleted")
 
 
-# Other Exception handling
+# Request Validation Exception handling
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(
     request: Request, exc: RequestValidationError

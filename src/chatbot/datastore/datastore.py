@@ -89,7 +89,3 @@ class Datastore:
     async def get_thread_messages(self, thread_id: str):
         """Retrieve the entire conversation history from database as a list."""
         return await self.database.get_thread_messages(thread_id)
-
-    async def update_thread_messages(self, thread_id: str, messages: list):
-        """Update conversation in database. Error if not exists"""
-        await self.database.update_thread_messages(thread_id, messages)

@@ -183,12 +183,15 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
 
         # Normalize the last user input and remove non-ascii characters
         last_user_message = re.sub(
-            r"[^\x00-\x7F]+", "", last_user_message
+            r"[^\x00-\x7F]+", "", last_user_message or ""
         )  # Remove all non-ascii characters
+
         last_user_message = re.sub(
             r"[\u2122\u00AE]", "", last_user_message
         )  # Remove standard trademark and copyright symbols
+
         last_user_message = last_user_message.replace("~", "-")
+
         logger.info(f"Normalized user input: {last_user_message}")
 
         # Keep copy of unmodified query to store in db
@@ -214,6 +217,8 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
                     and isinstance(metadata, dict)
                     and metadata["langgraph_node"] == "model"
                 ):
+                    resp_str += str(message.content)
+
                     if message.response_metadata.get("finish_reason", None) == "stop":
                         # Streaming done!
                         print(message.content, " >>> END")

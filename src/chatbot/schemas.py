@@ -54,7 +54,9 @@ class Message(BaseModel):
         """Field validator function to sanitize user populated fields from HTML"""
         v = bleach.clean(v, strip=True)
         if not v:  # Check for empty string
-            raise ValueError("Message content cannot be empty.")
+            v = " "
+        elif not isinstance(v, str):
+            raise TypeError("Message content must be a string.")
         return v
 
     @field_validator("timestamp")

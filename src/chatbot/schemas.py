@@ -223,7 +223,7 @@ def fallback_response_generator(sentence: str, thread_id: str = ""):
         )
         chain_response.id = resp_id
         chain_response.choices.append(response_choice)
-        yield "data: " + str(chain_response.model_dump()) + "\n\n"
+        yield str(chain_response.model_dump()) + "\n\n"
 
     # End with [DONE] response
     chain_response = ChainResponse(thread_id=thread_id)
@@ -232,4 +232,4 @@ def fallback_response_generator(sentence: str, thread_id: str = ""):
     )
     chain_response.id = resp_id
     chain_response.choices.append(response_choice)
-    yield "data: " + str(chain_response.model_dump()) + "\n\n"
+    yield str(chain_response.model_dump()) + "\n\n"

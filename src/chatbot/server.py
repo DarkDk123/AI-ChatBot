@@ -235,7 +235,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
                     chain_response.choices.append(response_choice)
                     logger.debug(response_choice)
 
-                    yield "data: " + str(chain_response.model_dump()) + "\n\n"
+                    yield str(chain_response.model_dump()) + "\n\n"
 
                 chain_response = ChainResponse(thread_id=prompt.thread_id)
 
@@ -296,7 +296,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             chain_response.choices.append(response_choice)
             logger.debug(response_choice)
 
-            yield "data: " + str(chain_response.model_dump()) + "\n\n"
+            yield str(chain_response.model_dump()) + "\n\n"
 
         return StreamingResponse(response_generator(), media_type="text/event-stream")
     # Catch any unhandled exceptions

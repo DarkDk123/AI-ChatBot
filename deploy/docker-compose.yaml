@@ -14,7 +14,7 @@ services:
 
       # DB ENVs
       POSTGRES_USER: "${POSTGRES_USER:-postgres}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
       POSTGRES_DB: "${POSTGRES_DB:-postgres}"
       DATABASE_URL: "${DATABASE_URL:-postgres:5432}"
 

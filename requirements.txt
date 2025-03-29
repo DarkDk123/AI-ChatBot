@@ -2,7 +2,7 @@
 
 # Required Main packages. [Without dependencies]
 
-pip==24.3.1
+pip==25.0.1
 uv==0.5.5
 
 # Core dependencies
@@ -12,7 +12,7 @@ langchain-groq==0.2.3
 streamlit==1.40.2
 
 # Database 
-psycopg==3.2.4
+psycopg==3.2.5
 psycopg-pool==3.2.5
 langgraph-checkpoint-postgres==2.0.0
 
@@ -20,5 +20,12 @@ langgraph-checkpoint-postgres==2.0.0
 fastapi==0.115.8
 uvicorn==0.34.0
 
+# API Auth
+python-jose==3.4.0
+passlib==1.7.4
+authlib==1.5.1
+
 # Others
 python-dotenv==1.0.1
+python-multipart==0.0.20
+itsdangerous==2.2.0

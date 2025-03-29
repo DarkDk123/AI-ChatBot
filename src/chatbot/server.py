@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from traceback import print_exc
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import HTTPException, RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -19,8 +19,10 @@ from langchain_core.messages import (
     HumanMessage,
 )
 from langchain_core.runnables import RunnableConfig
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
+from src.chatbot.auth import SECRET_KEY, get_current_user, router
 from src.chatbot.cache.cache_manager import CacheManager
 from src.chatbot.datastore.datastore import Datastore
 from src.chatbot.main import CompiledStateGraph, get_agent
@@ -50,11 +52,8 @@ agent: CompiledStateGraph
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan of the FastAPI app."""
-
     # Load required resources
-    global thread_manager
-    global datastore
-    global agent
+    global thread_manager, datastore, agent
 
     async_pool = get_async_pool()
     await async_pool.open(wait=True)
@@ -73,13 +72,14 @@ async def lifespan(app: FastAPI):
 
 # FastAPI app
 app = FastAPI(title="Osho Chatbot API", lifespan=lifespan)
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.include_router(router)
 
 
 # Routes
 @app.get("/healthz")
 def healthz():
     """Health Check for Chatbot Server."""
-
     return {"status": "ok", "message": "ChatBot API service is healthy"}
 
 
@@ -98,7 +98,9 @@ def healthz():
         }
     },
 )
-async def create_thread(user_id: str) -> CreateThreadResponse:
+async def create_thread(
+    user_id: str, current_user: dict = Depends(get_current_user)
+) -> CreateThreadResponse:
     """Create a new conversation thread."""
 
     # Try for fix number of time, if no unique thread_id is found raise Error
@@ -138,7 +140,9 @@ async def create_thread(user_id: str) -> CreateThreadResponse:
         }
     },
 )
-async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse:
+async def generate_answer(
+    request: Request, prompt: Prompt, current_user: dict = Depends(get_current_user)
+) -> StreamingResponse:
     """Generate and stream the response to the provided prompt."""
 
     logger.info(f"Input at /generate endpoint of Agent: {prompt.model_dump()}")
@@ -339,7 +343,7 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
         }
     },
 )
-async def get_thread_info(thread_id):
+async def get_thread_info(thread_id, current_user: dict = Depends(get_current_user)):
     """Get conversation_thread info from cache or database."""
     logger.info(f"Getting conversation for {thread_id}")
     if not thread_manager.is_valid_thread(thread_id):
@@ -380,7 +384,7 @@ async def get_thread_info(thread_id):
         }
     },
 )
-async def delete_thread(thread_id):
+async def delete_thread(thread_id, current_user: dict = Depends(get_current_user)):
     """Delete conversation_thread from cache and database."""
 
     logger.info(f"Deleting conversation for {thread_id}")

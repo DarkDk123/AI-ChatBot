@@ -2,7 +2,7 @@
 
 import time
 from datetime import datetime
-from typing import Annotated, List
+from typing import Annotated, List, Optional
 from uuid import uuid4
 
 import bleach
@@ -60,7 +60,7 @@ class Message(BaseModel):
         return v
 
     @field_validator("timestamp")
-    def sanitize_timestamp(cls, v):
+    def sanitize_timestamp(cls, v: str):
         """Field validator function to sanitize given timestamp"""
         if not isinstance(v, (str, float)):
             raise TypeError("Timestamp must be a string in ISO format or a float.")
@@ -233,3 +233,21 @@ def fallback_response_generator(sentence: str, thread_id: str = ""):
     chain_response.id = resp_id
     chain_response.choices.append(response_choice)
     yield str(chain_response.model_dump()) + "\n\n"
+
+
+# Auth models
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class User(BaseModel):
+    username: str
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+    disabled: Optional[bool] = None
+
+
+class UserInDB(User):
+    created_at: Optional[datetime] = None
+    hashed_password: str

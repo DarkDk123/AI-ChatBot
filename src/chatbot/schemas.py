@@ -250,4 +250,4 @@ class User(BaseModel):
 
 class UserInDB(User):
     created_at: Optional[datetime] = None
-    hashed_password: str
+    hashed_password: Optional[str]

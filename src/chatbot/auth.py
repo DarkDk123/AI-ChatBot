@@ -37,10 +37,7 @@ oauth.register(
     client_id=GOOGLE_CLIENT_ID,
     client_secret=GOOGLE_CLIENT_SECRET,
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
-    client_kwargs={
-        "scope": "openid email profile",
-        "redirect_url": "http://localhost:8001/auth/google",
-    },
+    client_kwargs={"scope": "openid email profile"},
 )
 
 oauth.register(
@@ -50,7 +47,11 @@ oauth.register(
     authorize_url="https://github.com/login/oauth/authorize",
     token_url="https://github.com/login/oauth/access_token",
     api_base_url="https://api.github.com/",
-    client_kwargs={"scope": "user:email"},
+    access_token_params=None,
+    authorize_params=None,
+    client_kwargs={
+        "scope": "user:email",
+    },
 )
 
 # Fake Users DB (to be replaced with a real database)
@@ -74,7 +75,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    # Use consistent hashing parameters to ensure same password generates same hash
+    return pwd_context.hash(password, scheme="bcrypt", rounds=12)
 
 
 def get_user(db: Dict[str, Dict[str, Any]], username: str) -> Optional[UserInDB]:
@@ -84,11 +86,20 @@ def get_user(db: Dict[str, Dict[str, Any]], username: str) -> Optional[UserInDB]
 
 def authenticate_user(
     db: Dict[str, Dict[str, Any]], username: str, password: str
-) -> Optional[UserInDB]:
+) -> Optional[User]:
+    logging.info("Authenticating user: %s", username)
     user = get_user(db, username)
-    if not user or not verify_password(password, user.hashed_password):
+    if not user:
         return None
-    return user
+
+    # If user has no hashed_password, they are an OAuth user
+    if user.hashed_password is None:
+        logging.warning("Attempted password login for OAuth user: %s", username)
+        return None
+
+    if not verify_password(password, user.hashed_password):
+        return None
+    return User(**user.model_dump())
 
 
 def create_session_token(
@@ -136,13 +147,16 @@ async def create_or_get_user_in_db(
     username = user_info.get("username") or user_info.get("email")
     if not username:
         raise HTTPException(status_code=400, detail="Invalid user data")
+    if username in fake_users_db and provider == "local":
+        raise HTTPException(status_code=400, detail="Username already exists")
     if username in fake_users_db:
         return User(**fake_users_db[username])
+
     user_data = {
         "username": username,
         "full_name": user_info.get("name") or user_info.get("full_name", ""),
         "email": user_info.get("email"),
-        "hashed_password": get_password_hash(user_info.get("password", SECRET_KEY))
+        "hashed_password": user_info.get("hashed_password")
         if provider == "local"
         else None,
         "disabled": False,
@@ -150,7 +164,7 @@ async def create_or_get_user_in_db(
     }
     # Save in db
     fake_users_db[username] = user_data
-
+    logging.info("Updated fake_users_db: %s", fake_users_db)
     # Return User (excluding password & timestamp)
     return User(**user_data)
 
@@ -232,6 +246,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @router.get("/login/google")
 async def google_login(request: Request):
     redirect_uri = request.url_for("google_auth")
+    logging.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.google.authorize_redirect(request, redirect_uri)  # type: ignore
 
 
@@ -240,6 +255,8 @@ async def google_auth(request: Request):
     try:
         token = await oauth.google.authorize_access_token(request)  # type: ignore
         user_info = token.get("userinfo")
+        logging.info("GOT GOOGLE USER INFO: %s", user_info)
+
         if user_info:
             user_data = await create_or_get_user_in_db(user_info, "google")
             access_token = create_session_token(user_data)
@@ -251,25 +268,48 @@ async def google_auth(request: Request):
 @router.get("/login/github")
 async def github_login(request: Request):
     redirect_uri = request.url_for("github_auth")
+    logging.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.github.authorize_redirect(request, redirect_uri)  # type: ignore
 
 
 @router.get("/github")
 async def github_auth(request: Request):
     try:
+        # Get access token from GitHub
+        logging.info("Callback URL query params: %s", request.url)
+        # logging.info("Redirect URL: %s", request.redirect_url)
         token = await oauth.github.authorize_access_token(request)  # type: ignore
+
+        if not token:
+            raise HTTPException(
+                status_code=400, detail="Failed to get GitHub access token"
+            )
+        logging.info("GOT GITHUB TOKEN: %s", token)
+
+        # Get user profile info from GitHub
         resp = await oauth.github.get("user", token=token)  # type: ignore
         user_info = resp.json()
+        logging.info("GOT GITHUB USER INFO: %s", user_info)
+
+        # Get user emails since GitHub API returns email separately
         emails_resp = await oauth.github.get("user/emails", token=token)  # type: ignore
         emails = emails_resp.json()
+        logging.info("GOT GITHUB USER EMAILS INFO: %s", emails)
+
+        # Find primary email from emails list
         primary_email = next(
             (email["email"] for email in emails if email.get("primary")), None
         )
         user_info["email"] = primary_email
-        if user_info:
-            user_data = await create_or_get_user_in_db(user_info, "github")
-            access_token = create_session_token(user_data)
-            return {"access_token": access_token, "token_type": "bearer"}
+
+        if not user_info:
+            raise HTTPException(status_code=400, detail="Invalid user data")
+
+        # Create/get user and generate session token
+        user_data = await create_or_get_user_in_db(user_info, "github")
+        access_token = create_session_token(user_data)
+        return {"access_token": access_token, "token_type": "bearer"}
+
     except OAuthError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
@@ -285,12 +325,12 @@ async def signup(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username already registered",
         )
-    hashed_password = get_password_hash(form_data.password)
+
     user_dict = {
         "username": form_data.username,
         "email": email,
         "full_name": full_name,
-        "hashed_password": hashed_password,
+        "hashed_password": get_password_hash(form_data.password),
         "disabled": False,
         "created_at": datetime.now(timezone.utc),
     }

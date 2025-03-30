@@ -22,7 +22,7 @@ from langchain_core.runnables import RunnableConfig
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
-from src.chatbot.auth import SECRET_KEY, get_current_user, router
+from src.chatbot.auth import SECRET_KEY, create_users_table, get_current_user, router
 from src.chatbot.cache.cache_manager import CacheManager
 from src.chatbot.datastore.datastore import Datastore
 from src.chatbot.main import CompiledStateGraph, get_agent
@@ -64,6 +64,7 @@ async def lifespan(app: FastAPI):
     agent = await get_agent()
 
     await datastore.database.init_script()
+    await create_users_table(async_pool)
 
     yield
     # Clean up the resources

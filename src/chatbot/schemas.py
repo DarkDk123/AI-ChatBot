@@ -243,11 +243,13 @@ class Token(BaseModel):
 
 class User(BaseModel):
     username: str
-    email: Optional[str] = None
-    full_name: Optional[str] = None
+    email: str
+    full_name: str
     disabled: Optional[bool] = None
 
 
 class UserInDB(User):
-    created_at: Optional[datetime] = None
-    hashed_password: Optional[str]
+    created_at: datetime
+    hashed_password: Optional[str] = None
+    oauth_provider: Optional[str] = None
+    oauth_id: Optional[str] = None

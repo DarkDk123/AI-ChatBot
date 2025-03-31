@@ -26,6 +26,10 @@ from src.chatbot.datastore.users import (
 from src.chatbot.schemas import Token, User, UserInDB
 from src.chatbot.utils import AsyncConnectionPool, get_async_pool
 
+logging.basicConfig(level=os.getenv("LOG_LEVEL", logging.INFO))
+logger = logging.getLogger(__name__)
+
+
 # Configurations
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
@@ -83,11 +87,6 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password, scheme="bcrypt", rounds=12)
 
 
-# def get_user(db: Dict[str, Dict[str, Any]], username: str) -> Optional[UserInDB]:
-#     user_data = db.get(username)
-#     return UserInDB(**user_data) if user_data else None
-
-
 # Update the utility functions
 async def get_user(pool: AsyncConnectionPool, username: str) -> Optional[UserInDB]:
     """Get user from database"""
@@ -98,14 +97,14 @@ async def get_user(pool: AsyncConnectionPool, username: str) -> Optional[UserInD
 async def authenticate_user(
     pool: AsyncConnectionPool, username: str, password: str
 ) -> Optional[User]:
-    logging.info("Authenticating user: %s", username)
+    logger.info("Authenticating user: %s", username)
     user = await get_user(pool, username)
     if not user:
         return None
 
     # If user has no hashed_password, they are an OAuth user
     if user.hashed_password is None:
-        logging.warning("Attempted password login for OAuth user: %s", username)
+        logger.warning("Attempted password login for OAuth user: %s", username)
         return None
 
     if not verify_password(password, user.hashed_password):
@@ -126,7 +125,7 @@ def create_session_token(
         "user": user_data.model_dump(),
     }
 
-    logging.info("token_data: %s", token_data)
+    logger.info("token_data: %s", token_data)
     return jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -159,7 +158,7 @@ async def create_or_get_user_in_db(
     email = str(user_info.get("email"))
 
     if not username:
-        logging.error("Invalid user data: missing username or email")
+        logger.error("Invalid user data: missing username or email")
         raise HTTPException(status_code=400, detail="Invalid user data")
 
     # Check existing user
@@ -167,7 +166,7 @@ async def create_or_get_user_in_db(
     existing_user_email = await get_db_user_by_email(pool, email)
     if existing_user or existing_user_email:
         if provider == "local":
-            logging.error(
+            logging.info(
                 "Username/email already exists in database for provider: %s", provider
             )
             raise HTTPException(
@@ -200,16 +199,16 @@ async def create_or_get_user_in_db(
             # Default fields: created_at=Timestampz-Now & disabled=False
         )
 
-        logging.info("User created successfully: %s", username)
+        logger.info("User created successfully: %s", username)
         return User(**new_user)
     except Exception as e:
-        logging.error("Error creating user: %s", str(e))
+        logger.error("Error creating user: %s", str(e))
         raise HTTPException(status_code=400, detail="User creation failed")
 
 
 # Routes
-@router.get("/")
-async def homepage(request: Request):
+@router.get("/", response_class=HTMLResponse)
+async def homepage(request: Request) -> HTMLResponse:
     """Homepage endpoint that displays user info if logged in, or login options if not."""
     user = request.session.get("user")
     if user:
@@ -286,34 +285,37 @@ async def login_for_access_token(
 @router.get("/login/google")
 async def google_login(request: Request):
     redirect_uri = request.url_for("google_auth")
-    logging.info("REDIRECT URI: %s", redirect_uri)
+    logger.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.google.authorize_redirect(request, redirect_uri)  # type: ignore
 
 
-@router.get("/google")
+@router.get("/google", response_model=Token)
 async def google_auth(request: Request, pool: AsyncConnectionPool = Depends(get_db)):
     try:
         token = await oauth.google.authorize_access_token(request)  # type: ignore
         user_info = token.get("userinfo")
+
         if not user_info:
             raise HTTPException(status_code=400, detail="Invalid user data")
+
         user_data = await create_or_get_user_in_db(pool, user_info, "google")
         access_token = create_session_token(user_data)
-        logging.info("Google Authorized user: %s", user_data.username)
+
+        logger.info("Google Authorized user: %s", user_data.username)
         return {"access_token": access_token, "token_type": "bearer"}
     except OAuthError as error:
-        logging.error("OAuth error during Google authentication: %s", str(error))
+        logger.error("OAuth error during Google authentication: %s", str(error))
         raise HTTPException(status_code=400, detail=str(error))
 
 
 @router.get("/login/github")
 async def github_login(request: Request):
     redirect_uri = request.url_for("github_auth")
-    logging.info("REDIRECT URI: %s", redirect_uri)
+    logger.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.github.authorize_redirect(request, redirect_uri)  # type: ignore
 
 
-@router.get("/github")
+@router.get("/github", response_model=Token)
 async def github_auth(
     request: Request,
     pool: AsyncConnectionPool = Depends(get_db),  # Add database dependency
@@ -346,13 +348,16 @@ async def github_auth(
             pool=pool, user_info=user_data, provider="github"
         )
 
+        logger.info("Github Authorized user: %s", user.username)
+
         access_token = create_session_token(user)
-        return {"access_token": access_token, "token_type": "bearer", "user": user_data}
+        return {"access_token": access_token, "token_type": "bearer"}
 
     except OAuthError as error:
+        logger.error("GitHub auth error: %s", str(error))
         raise HTTPException(status_code=400, detail=str(error))
     except Exception as e:
-        logging.error("GitHub auth error: %s", str(e), exc_info=True)
+        logger.error("GitHub auth error: %s", str(e), exc_info=True)
         raise HTTPException(
             status_code=500, detail="Authentication service unavailable"
         )
@@ -375,10 +380,10 @@ async def signup(
         }
 
         new_user = await create_or_get_user_in_db(pool, user_info, "local")
-        logging.info("Created user on Signup: %s", new_user.username)
+        logger.info("Created user on Signup: %s", new_user.username)
         return new_user
     except Exception as e:
-        logging.error("Signup error: %s", str(e))
+        logger.error("Signup error: %s", str(e))
         raise HTTPException(status_code=400, detail="Registration failed")
 
 

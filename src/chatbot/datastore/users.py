@@ -26,11 +26,19 @@ async def create_users_table(pool: AsyncConnectionPool):
             oauth_provider VARCHAR(50),
             oauth_id VARCHAR(255)
         );
+    """)
+
+    create_index_username_sql = sql.SQL("""
         CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+    """)
+    create_index_email_sql = sql.SQL("""
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     """)
+
     async with pool.connection() as conn:
         await conn.execute(create_table_sql)
+        await conn.execute(create_index_username_sql)
+        await conn.execute(create_index_email_sql)
 
 
 async def get_user(

@@ -77,7 +77,24 @@ async def get_db():
     return get_async_pool()
 
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"],
+    responses={
+        400: {
+            "description": "Bad Request",
+            "content": {
+                "application/json": {"example": {"detail": "Bad request occurred"}}
+            },
+        },
+        401: {
+            "description": "Unauthorized",
+            "content": {
+                "application/json": {"example": {"detail": "Unauthorized access"}}
+            },
+        },
+    },
+)
 
 
 # Utility functions

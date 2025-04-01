@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 logger.info("Initializing Chatbot API app...")
 
 # Initialize app
-thread_manager: CacheManager
+cache: CacheManager
 datastore: Datastore
 agent: CompiledStateGraph
 
@@ -53,13 +53,13 @@ agent: CompiledStateGraph
 async def lifespan(app: FastAPI):
     """Lifespan of the FastAPI app."""
     # Load required resources
-    global thread_manager, datastore, agent
+    global cache, datastore, agent
 
     async_pool = get_async_pool()
     await async_pool.open(wait=True)
     print("✌️ Connections got!!!")
 
-    thread_manager = CacheManager()
+    cache = CacheManager()
     datastore = Datastore()
     agent = await get_agent()
 
@@ -67,6 +67,7 @@ async def lifespan(app: FastAPI):
     await create_users_table(async_pool)
 
     yield
+
     # Clean up the resources
     await async_pool.close()
 
@@ -109,14 +110,14 @@ async def create_thread(
         thread_id = str(uuid4())
 
         # Ensure thread_id created does not exist in cache
-        if not thread_manager.is_valid_thread(thread_id):
+        if not cache.is_valid_thread(thread_id):
             # Ensure thread_id created does not exist in datastore (permanenet store like postgres)
             if not await datastore.is_valid_thread(thread_id):
                 # Create a thread on cache for validation
-                if thread_manager.create_conversation_thread(thread_id, user_id):
+                if cache.create_conversation_thread(thread_id, user_id):
                     if await datastore.save_update_thread(
                         thread_id=thread_id,
-                        **thread_manager.get_thread_info(thread_id),
+                        **cache.get_thread_info(thread_id),
                     ):
                         return CreateThreadResponse(thread_id=thread_id)
                     raise HTTPException(
@@ -152,7 +153,7 @@ async def generate_answer(
         user_query_timestamp = time.time()
 
         # Handle invalid thread id
-        if not thread_manager.is_valid_thread(prompt.thread_id):
+        if not cache.is_valid_thread(prompt.thread_id):
             if not await datastore.is_valid_thread(prompt.thread_id):
                 logger.info("No conversation found in cache or database")
                 logger.error(
@@ -169,7 +170,7 @@ async def generate_answer(
 
             thread_info = await datastore.get_thread_info(prompt.thread_id)
             if thread_info:
-                thread_manager.update_conversation_thread(**thread_info)
+                cache.update_conversation_thread(**thread_info)
 
             else:
                 logger.info("No conversation found in cache or database")
@@ -260,7 +261,7 @@ async def generate_answer(
             response_timestamp = time.time()
 
             # Cache should fetch thread from db first. (Fetched above)
-            thread_manager.update_conversation_thread(
+            cache.update_conversation_thread(
                 prompt.thread_id,
                 prompt.user_id or "default",
                 [
@@ -347,20 +348,20 @@ async def generate_answer(
 async def get_thread_info(thread_id, current_user: dict = Depends(get_current_user)):
     """Get conversation_thread info from cache or database."""
     logger.info(f"Getting conversation for {thread_id}")
-    if not thread_manager.is_valid_thread(thread_id):
+    if not cache.is_valid_thread(thread_id):
         if not await datastore.is_valid_thread(thread_id):
             logger.info("No conversation found in thread or database")
             raise HTTPException(404, detail="Thread info not found")
 
         thread_info = await datastore.get_thread_info(thread_id)
         if thread_info:
-            thread_manager.update_conversation_thread(**thread_info)
+            cache.update_conversation_thread(**thread_info)
 
         else:
             logger.info("No conversation found in thread or database")
             raise HTTPException(404, detail="Invalid thread info found!")
 
-    thread_info = thread_manager.get_thread_info(thread_id)
+    thread_info = cache.get_thread_info(thread_id)
     logger.info(f"Get Thread info: {thread_info}")
 
     return GetThreadResponse(
@@ -390,7 +391,7 @@ async def delete_thread(thread_id, current_user: dict = Depends(get_current_user
 
     logger.info(f"Deleting conversation for {thread_id}")
 
-    thread_info = thread_manager.is_valid_thread(thread_id)
+    thread_info = cache.is_valid_thread(thread_id)
     datastore_thread_info = await datastore.is_valid_thread(thread_id)
 
     if not (thread_info or datastore_thread_info):
@@ -398,7 +399,7 @@ async def delete_thread(thread_id, current_user: dict = Depends(get_current_user
         return DeleteThreadResponse(message="Thread info not found")
 
     logger.info(f"Deleting conversation for {thread_id} from cache")
-    thread_manager.delete_conversation_thread(thread_id)
+    cache.delete_conversation_thread(thread_id)
 
     logger.info(f"Deleting conversation for {thread_id} in database")
     await datastore.delete_conversation_thread(thread_id)

@@ -8,6 +8,7 @@ import re
 import time
 from contextlib import asynccontextmanager
 from traceback import print_exc
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Request
@@ -79,7 +80,7 @@ app.include_router(router)
 
 
 # Routes
-@app.get("/healthz")
+@app.get("/healthz", tags=["Observability"])
 def healthz():
     """Health Check for Chatbot Server."""
     return {"status": "ok", "message": "ChatBot API service is healthy"}
@@ -101,7 +102,7 @@ def healthz():
     },
 )
 async def create_thread(
-    user_id: str, current_user: dict = Depends(get_current_user)
+    user_id: Optional[str] = None, current_user: dict = Depends(get_current_user)
 ) -> CreateThreadResponse:
     """Create a new conversation thread."""
 
@@ -114,7 +115,9 @@ async def create_thread(
             # Ensure thread_id created does not exist in datastore (permanenet store like postgres)
             if not await datastore.is_valid_thread(thread_id):
                 # Create a thread on cache for validation
-                if cache.create_conversation_thread(thread_id, user_id):
+                if cache.create_conversation_thread(
+                    thread_id, current_user.get("username", "default_user")
+                ):
                     if await datastore.save_update_thread(
                         thread_id=thread_id,
                         **cache.get_thread_info(thread_id),
@@ -147,6 +150,9 @@ async def generate_answer(
 ) -> StreamingResponse:
     """Generate and stream the response to the provided prompt."""
 
+    prompt.user_id = current_user.get(
+        "username", "default_user"
+    )  # updating logged in user.
     logger.info(f"Input at /generate endpoint of Agent: {prompt.model_dump()}")
 
     try:
@@ -263,7 +269,7 @@ async def generate_answer(
             # Cache should fetch thread from db first. (Fetched above)
             cache.update_conversation_thread(
                 prompt.thread_id,
-                prompt.user_id or "default",
+                prompt.user_id or "default_user",
                 [
                     Message(
                         role="user",
@@ -282,7 +288,7 @@ async def generate_answer(
             # Can go to FastAPI's Background process. [for low latency]
             await datastore.save_update_thread(
                 prompt.thread_id,
-                prompt.user_id or "default",
+                prompt.user_id or "default_user",
                 [
                     Message(
                         role="user",

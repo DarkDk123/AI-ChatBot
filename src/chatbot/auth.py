@@ -99,10 +99,12 @@ router = APIRouter(
 
 # Utility functions
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify plain-text password with hashed password"""
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
+    """Get password hash"""
     # Use consistent hashing parameters to ensure same password generates same hash
     return pwd_context.hash(password, scheme="bcrypt", rounds=12)
 
@@ -117,6 +119,8 @@ async def get_user(pool: AsyncConnectionPool, username: str) -> Optional[UserInD
 async def authenticate_user(
     pool: AsyncConnectionPool, username: str, password: str
 ) -> Optional[User]:
+    """Authenticate user with username-password"""
+
     logger.info("Authenticating user: %s", username)
     user = await get_user(pool, username)
     if not user:
@@ -136,6 +140,7 @@ async def authenticate_user(
 def create_session_token(
     user_data: User, expires_delta: Optional[timedelta] = None
 ) -> str:
+    """Generate a JWT access token for session management"""
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
@@ -150,6 +155,7 @@ def create_session_token(
 
 
 async def verify_session_token(token: str) -> Dict[str, Any]:
+    """Verify and decode a JWT access token"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         if float(payload["exp"]) < datetime.now(timezone.utc).timestamp():
@@ -168,12 +174,15 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
+    """Get current user from token (A Dependable)"""
     return await verify_session_token(token)
 
 
 async def create_or_get_user_in_db(
     pool: AsyncConnectionPool, user_info: Dict[str, Any], provider: str = "local"
 ) -> User:
+    """Create or get user from database"""
+
     username = user_info.get("username") or user_info.get("email")
     email = str(user_info.get("email"))
 
@@ -232,6 +241,7 @@ async def create_or_get_user_in_db(
 @router.get("/", response_class=HTMLResponse)
 async def homepage(request: Request) -> HTMLResponse:
     """Homepage endpoint that displays user info if logged in, or login options if not."""
+
     try:
         token = await oauth2_scheme(request)
         user = await get_current_user(str(token))
@@ -307,6 +317,8 @@ async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     pool: AsyncConnectionPool = Depends(get_db),
 ):
+    """OAuth2 compatible token login, get an access token for future requests"""
+
     user = await authenticate_user(pool, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -319,6 +331,7 @@ async def login_for_access_token(
 
 @router.get("/login/google")
 async def google_login(request: Request):
+    """Continue with Google"""
     redirect_uri = request.url_for("google_auth")
     logger.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.google.authorize_redirect(request, redirect_uri)  # type: ignore
@@ -326,6 +339,7 @@ async def google_login(request: Request):
 
 @router.get("/google", response_model=Token)
 async def google_auth(request: Request, pool: AsyncConnectionPool = Depends(get_db)):
+    """Google authentication callback, should not be called directly"""
     try:
         token = await oauth.google.authorize_access_token(request)  # type: ignore
         user_info = token.get("userinfo")
@@ -354,6 +368,7 @@ async def google_auth(request: Request, pool: AsyncConnectionPool = Depends(get_
 
 @router.get("/login/github")
 async def github_login(request: Request):
+    """Continue with GitHub"""
     redirect_uri = request.url_for("github_auth")
     logger.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.github.authorize_redirect(request, redirect_uri)  # type: ignore
@@ -364,6 +379,7 @@ async def github_auth(
     request: Request,
     pool: AsyncConnectionPool = Depends(get_db),  # Add database dependency
 ):
+    """GitHub authentication callback, should not be called directly"""
     try:
         # Get access token from GitHub
         token = await oauth.github.authorize_access_token(request)  # type: ignore
@@ -415,6 +431,7 @@ async def signup(
     img_path: str = Form(None),
     pool: AsyncConnectionPool = Depends(get_db),
 ):
+    """Sign up a new user with email and password"""
     try:
         # Validate email using the same regex as before, but now using form_data.username as email
         if not re.match(
@@ -441,13 +458,15 @@ async def signup(
 
 @router.get("/logout")
 async def logout():
+    """Logout the current user [Not useful]"""
     # For token-based auth, the client simply discards the token.
     return {"message": "Logout by discarding the token on client side"}
 
 
 @router.get("/get_user")
 async def get_user_details(current_user: Dict[str, Any] = Depends(get_current_user)):
-    return {"message": "This is a protected route", "user": current_user}
+    """Get current user details"""
+    return {"message": "Logged in User details", "user": current_user}
 
 
 __all__ = ["SECRET_KEY", "create_users_table", "get_current_user", "router"]

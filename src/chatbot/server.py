@@ -380,7 +380,7 @@ async def get_thread_info(thread_id, current_user: dict = Depends(get_current_us
 @app.delete(
     "/delete_thread",
     tags=["Thread Management"],
-    response_model=DeleteThreadResponse(),
+    response_model=DeleteThreadResponse,
     responses={
         500: {
             "description": "Internal Server Error",

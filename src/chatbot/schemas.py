@@ -246,6 +246,7 @@ class User(BaseModel):
     email: str
     full_name: str
     disabled: Optional[bool] = None
+    picture_url: Optional[str] = None
 
 
 class UserInDB(User):

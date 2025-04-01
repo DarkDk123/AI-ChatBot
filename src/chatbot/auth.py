@@ -1,8 +1,8 @@
 """Authentication module for ChatBot API."""
 
-import json
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any, Dict, Optional
 
@@ -33,7 +33,10 @@ logger = logging.getLogger(__name__)
 # Configurations
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
 ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "129600")
+)  # 3 months in minutes
+DEFAULT_IMG_URL = "https://avatars.githubusercontent.com/u/60871161?v=4"
 
 # OAuth configurations
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
@@ -162,15 +165,16 @@ async def create_or_get_user_in_db(
         raise HTTPException(status_code=400, detail="Invalid user data")
 
     # Check existing user
-    existing_user = await get_db_user(pool, username if provider == "local" else email)
-    existing_user_email = await get_db_user_by_email(pool, email)
+    existing_user = await get_db_user(pool, username)
+    existing_user_email = await get_db_user_by_email(pool, email=email)
     if existing_user or existing_user_email:
         if provider == "local":
             logging.info(
                 "Username/email already exists in database for provider: %s", provider
             )
             raise HTTPException(
-                status_code=400, detail="Username already exists in database"
+                status_code=400,
+                detail="The username/email address provided is already in use",
             )
 
         return User(**(existing_user or existing_user_email or {}))
@@ -179,7 +183,7 @@ async def create_or_get_user_in_db(
     user_data = {
         "username": username,
         "email": email,
-        "full_name": user_info.get("name") or user_info.get("full_name", ""),
+        "full_name": user_info.get("full_name", "Johnny Lawrence"),
         "hashed_password": user_info.get("hashed_password")
         if provider == "local"
         else None,
@@ -196,6 +200,7 @@ async def create_or_get_user_in_db(
             hashed_password=user_data["hashed_password"],
             oauth_provider=user_data["oauth_provider"],
             oauth_id=user_data["oauth_id"],
+            picture_url=user_info.get("picture_url"),
             # Default fields: created_at=Timestampz-Now & disabled=False
         )
 
@@ -210,14 +215,27 @@ async def create_or_get_user_in_db(
 @router.get("/", response_class=HTMLResponse)
 async def homepage(request: Request) -> HTMLResponse:
     """Homepage endpoint that displays user info if logged in, or login options if not."""
-    user = request.session.get("user")
+    try:
+        token = await oauth2_scheme(request)
+        user = await get_current_user(str(token))
+    except HTTPException as e:
+        print(e)
+        user = None
+
     if user:
-        data = json.dumps(user, indent=2)
         html = f"""
             <div style="font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px;">
-                <h1>Welcome!</h1>
-                <div style="background: #f5f5f5; padding: 20px; border-radius: 4px;">
-                    <pre style="margin: 0;">{data}</pre>
+                <h1>Welcome, {user.get("full_name", "Johnny Lawrence")}!</h1>
+                <div style="background: #f5f5f5; padding: 20px; border-radius: 4px; display: flex; align-items: center;">
+                    <div style="flex: 1;">
+                        <p>Username: {user.get("username", "Unknown")}</p>
+                        <p>Email: {user.get("email", "Unknown")}</p>
+                        <p>Full Name: {user.get("full_name", "Johnny Lawrence")}</p>
+                        <p>Disabled: {user.get("disabled", False)}</p>
+                    </div>
+                    <div style="flex: 1; text-align: center;">
+                        <img src="{user.get("picture_url", DEFAULT_IMG_URL)}" style="width: 100px; height: 100px; border-radius: 50%;">
+                    </div>
                 </div>
                 <a href="{request.url_for("logout")}" style="display: inline-block; margin-top: 20px; padding: 10px 20px; 
                     background: #dc3545; color: white; text-decoration: none; border-radius: 4px;">
@@ -298,10 +316,19 @@ async def google_auth(request: Request, pool: AsyncConnectionPool = Depends(get_
         if not user_info:
             raise HTTPException(status_code=400, detail="Invalid user data")
 
-        user_data = await create_or_get_user_in_db(pool, user_info, "google")
-        access_token = create_session_token(user_data)
+        logger.info("User info: %s", user_info)
+        user_data = {
+            "username": user_info.get("email"),  # Use email as username for Google
+            "email": user_info.get("email"),
+            "full_name": user_info.get("name"),
+            "id": user_info.get("sub"),
+            "picture_url": user_info.get("picture"),
+        }
 
-        logger.info("Google Authorized user: %s", user_data.username)
+        user = await create_or_get_user_in_db(pool, user_data, "google")
+        access_token = create_session_token(user)
+
+        logger.info("Google Authorized user: %s", user.username)
         return {"access_token": access_token, "token_type": "bearer"}
     except OAuthError as error:
         logger.error("OAuth error during Google authentication: %s", str(error))
@@ -339,8 +366,9 @@ async def github_auth(
         user_data = {
             "username": user_info.get("login"),  # GitHub username
             "email": user_info.get("email"),
-            "name": user_info.get("name"),
+            "full_name": user_info.get("name"),
             "id": user_info.get("id"),
+            "picture_url": user_info.get("avatar_url"),
         }
 
         # Create/get user in database
@@ -366,17 +394,24 @@ async def github_auth(
 @router.post("/signup", response_model=User)
 async def signup(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    email: str = Form(...),
-    full_name: Optional[str] = Form(None),
+    full_name: str = Form(),
+    img_path: str = Form(None),
     pool: AsyncConnectionPool = Depends(get_db),
 ):
     try:
+        # Validate email using the same regex as before, but now using form_data.username as email
+        if not re.match(
+            r"^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$", form_data.username
+        ):
+            raise HTTPException(status_code=400, detail="Invalid email format")
+
         hashed_password = get_password_hash(form_data.password)
         user_info = {
             "username": form_data.username,
-            "email": email,
+            "email": form_data.username,  # Using form_data.username as email
             "full_name": full_name,
             "hashed_password": hashed_password,
+            "picture_url": img_path or DEFAULT_IMG_URL,
         }
 
         new_user = await create_or_get_user_in_db(pool, user_info, "local")
@@ -384,7 +419,7 @@ async def signup(
         return new_user
     except Exception as e:
         logger.error("Signup error: %s", str(e))
-        raise HTTPException(status_code=400, detail="Registration failed")
+        raise HTTPException(status_code=400, detail=f"Failed: {e}")
 
 
 @router.get("/logout")
@@ -393,8 +428,8 @@ async def logout():
     return {"message": "Logout by discarding the token on client side"}
 
 
-@router.get("/protected-test")
-async def protected_test(current_user: Dict[str, Any] = Depends(get_current_user)):
+@router.get("/get_user")
+async def get_user_details(current_user: Dict[str, Any] = Depends(get_current_user)):
     return {"message": "This is a protected route", "user": current_user}
 
 

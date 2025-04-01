@@ -24,7 +24,8 @@ async def create_users_table(pool: AsyncConnectionPool):
             disabled BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMPTZ DEFAULT NOW(),
             oauth_provider VARCHAR(50),
-            oauth_id VARCHAR(255)
+            oauth_id VARCHAR(255),
+            picture_url TEXT
         );
     """)
 
@@ -61,6 +62,7 @@ async def get_user(
                 "created_at": row[6],
                 "oauth_provider": row[7],
                 "oauth_id": row[8],
+                "picture_url": row[9],
             }
         return None
 
@@ -85,6 +87,7 @@ async def get_user_by_email(
                 "created_at": row[6],
                 "oauth_provider": row[7],
                 "oauth_id": row[8],
+                "picture_url": row[9],
             }
         return None
 
@@ -97,17 +100,26 @@ async def create_user(
     hashed_password: Optional[str],
     oauth_provider: Optional[str] = None,
     oauth_id: Optional[str] = None,
+    picture_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create new user"""
     async with pool.connection() as conn:
         cursor = await conn.execute(
             sql.SQL("""
             INSERT INTO users 
-                (username, email, full_name, hashed_password, oauth_provider, oauth_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+                (username, email, full_name, hashed_password, oauth_provider, oauth_id, picture_url)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING *
             """),
-            (username, email, full_name, hashed_password, oauth_provider, oauth_id),
+            (
+                username,
+                email,
+                full_name,
+                hashed_password,
+                oauth_provider,
+                oauth_id,
+                picture_url,
+            ),
         )
         row = await cursor.fetchone()
         if row:
@@ -121,5 +133,6 @@ async def create_user(
                 "created_at": row[6],
                 "oauth_provider": row[7],
                 "oauth_id": row[8],
+                "picture_url": row[9],
             }
         return {}

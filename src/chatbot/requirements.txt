@@ -27,3 +27,4 @@ python-dotenv==1.0.1
 uuid==1.30
 bleach==6.2.0
 nest-asyncio==1.6.0
+itsdangerous==2.2.0

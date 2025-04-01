@@ -18,7 +18,7 @@ async def create_users_table(pool: AsyncConnectionPool):
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username VARCHAR(255) UNIQUE NOT NULL,
-            email VARCHAR(255) UNIQUE NOT NULL,
+            email VARCHAR(255) UNIQUE,
             full_name VARCHAR(255) NOT NULL,
             hashed_password VARCHAR(255),
             disabled BOOLEAN DEFAULT FALSE,

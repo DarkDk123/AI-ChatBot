@@ -173,7 +173,9 @@ async def verify_session_token(token: str) -> Dict[str, Any]:
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
+async def get_current_user(
+    token: Annotated[str, Depends(oauth2_scheme)],
+) -> Dict[str, Any]:
     """Get current user from token (A Dependable)"""
     return await verify_session_token(token)
 
@@ -280,10 +282,10 @@ async def homepage(request: Request) -> HTMLResponse:
                 <div style="margin-bottom: 30px; padding: 20px; background: #f8f9fa; border-radius: 4px;">
                     <h2>Sign Up</h2>
                     <form action="{request.url_for("signup")}" method="post" style="margin-bottom: 20px;">
-                        <input type="text" name="username" placeholder="Username" style="padding: 8px; margin: 5px;">
-                        <input type="password" name="password" placeholder="Password" style="padding: 8px; margin: 5px;">
-                        <input type="email" name="email" placeholder="Email" style="padding: 8px; margin: 5px;">
-                        <input type="text" name="full_name" placeholder="Full Name (optional)" style="padding: 8px; margin: 5px;">
+                        <input type="email" name="username" placeholder="Email" style="padding: 8px; margin: 5px;" required>
+                        <input type="password" name="password" placeholder="Password" style="padding: 8px; margin: 5px;" required>
+                        <input type="text" name="full_name" placeholder="Full Name" style="padding: 8px; margin: 5px;" required>
+                        <input type="url" name="img_path" placeholder="Image Path (optional)" style="padding: 8px; margin: 5px;">
                         <button type="submit" style="padding: 8px 15px; background: #007bff; color: white; border: none; border-radius: 4px;">
                             Sign Up
                         </button>
@@ -292,19 +294,19 @@ async def homepage(request: Request) -> HTMLResponse:
                 <div style="margin-bottom: 30px; padding: 20px; background: #f8f9fa; border-radius: 4px;">
                     <h2>Sign In</h2>
                     <form action="{request.url_for("login_for_access_token")}" method="post" style="margin-bottom: 20px;">
-                        <input type="text" name="username" placeholder="Username" style="padding: 8px; margin: 5px;">
-                        <input type="password" name="password" placeholder="Password" style="padding: 8px; margin: 5px;">
+                        <input type="email" name="username" placeholder="Email" style="padding: 8px; margin: 5px;" required>
+                        <input type="password" name="password" placeholder="Password" style="padding: 8px; margin: 5px;" required>
                         <button type="submit" style="padding: 8px 15px; background: #28a745; color: white; border: none; border-radius: 4px;">
                             Login with Username
                         </button>
                     </form>
                     <a href="{request.url_for("google_login")}" style="display: inline-block; margin: 10px; padding: 10px 20px;
                         background: #4285f4; color: white; text-decoration: none; border-radius: 4px;">
-                        Login with Google
+                        Continue with Google
                     </a>
                     <a href="{request.url_for("github_login")}" style="display: inline-block; margin: 10px; padding: 10px 20px;
                         background: #333; color: white; text-decoration: none; border-radius: 4px;">
-                        Login with GitHub
+                        Continue with GitHub
                     </a>
                 </div>
             </div>
@@ -315,7 +317,7 @@ async def homepage(request: Request) -> HTMLResponse:
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    pool: AsyncConnectionPool = Depends(get_db),
+    pool: Annotated[AsyncConnectionPool, Depends(get_db)],
 ):
     """OAuth2 compatible token login, get an access token for future requests"""
 
@@ -338,7 +340,9 @@ async def google_login(request: Request):
 
 
 @router.get("/google", response_model=Token)
-async def google_auth(request: Request, pool: AsyncConnectionPool = Depends(get_db)):
+async def google_auth(
+    request: Request, pool: Annotated[AsyncConnectionPool, Depends(get_db)]
+):
     """Google authentication callback, should not be called directly"""
     try:
         token = await oauth.google.authorize_access_token(request)  # type: ignore
@@ -377,7 +381,7 @@ async def github_login(request: Request):
 @router.get("/github", response_model=Token)
 async def github_auth(
     request: Request,
-    pool: AsyncConnectionPool = Depends(get_db),  # Add database dependency
+    pool: Annotated[AsyncConnectionPool, Depends(get_db)],  # Add database dependency
 ):
     """GitHub authentication callback, should not be called directly"""
     try:
@@ -427,9 +431,9 @@ async def github_auth(
 @router.post("/signup", response_model=User)
 async def signup(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    pool: Annotated[AsyncConnectionPool, Depends(get_db)],
     full_name: str = Form(),
     img_path: str = Form(None),
-    pool: AsyncConnectionPool = Depends(get_db),
 ):
     """Sign up a new user with email and password"""
     try:
@@ -464,7 +468,9 @@ async def logout():
 
 
 @router.get("/get_user")
-async def get_user_details(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def get_user_details(
+    current_user: Annotated[Dict[str, Any], Depends(get_current_user)],
+):
     """Get current user details"""
     return {"message": "Logged in User details", "user": current_user}
 

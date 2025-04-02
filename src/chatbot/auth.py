@@ -43,6 +43,7 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
 GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")
+PUBLIC_HOSTED_URL = os.getenv("PUBLIC_HOSTED_URL", "")
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -334,7 +335,11 @@ async def login_for_access_token(
 @router.get("/login/google")
 async def google_login(request: Request):
     """Continue with Google"""
-    redirect_uri = request.url_for("google_auth")
+    redirect_uri = (
+        f"{PUBLIC_HOSTED_URL}/auth/google"
+        if PUBLIC_HOSTED_URL
+        else request.url_for("google_auth")
+    )
     logger.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.google.authorize_redirect(request, redirect_uri)  # type: ignore
 
@@ -373,7 +378,11 @@ async def google_auth(
 @router.get("/login/github")
 async def github_login(request: Request):
     """Continue with GitHub"""
-    redirect_uri = request.url_for("github_auth")
+    redirect_uri = (
+        f"{PUBLIC_HOSTED_URL}/auth/github"
+        if PUBLIC_HOSTED_URL
+        else request.url_for("github_auth")
+    )
     logger.info("REDIRECT URI: %s", redirect_uri)
     return await oauth.github.authorize_redirect(request, redirect_uri)  # type: ignore
 

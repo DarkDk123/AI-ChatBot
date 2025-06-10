@@ -36,7 +36,7 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 You can run the chatbot **locally** (default, recommended) or with **Docker** (coming soon).  
 **Local mode uses only temporary `in-memory storage`—conversations are lost on restart.** 🫧
 
-> Some architectural changes are in progress to run **Local/Dockerized** [May take time] ⏳
+> Some architectural changes are in progress to run **Local/Dockerized** applications smoothly. [May take time] ⏳
 
 <details open>
 <summary><strong>🔹 Local (Recommended)</strong></summary>

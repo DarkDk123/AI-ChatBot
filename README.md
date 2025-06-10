@@ -26,7 +26,7 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 - 🦜⛓️ [LangChain](https://langchain.com/) (with [LangGraph](https://www.langchain.com/langgraph)) - Framework for LLM Applications development & orchestration.
   
 - 🤗 [HuggingFace](https://huggingface.co/) (with [HuggingFace Inference API](https://api-inference.huggingface.co/)) - A library for natural language processing tasks and API for model inference.
-- ⚡ [Groq API](https://groq.com/) - Ultra-fast inference API for running LLMs, supported as a primary backend option for this chatbot.
+- ⚡ [Groq API](https://console.groq.com/playground) - Ultra-fast inference API for running LLMs, supported as a primary backend option for this chatbot.
   
 - 👑 [Streamlit](https://streamlit.io/) - A framework for building web applications for machine learning and data science.
 

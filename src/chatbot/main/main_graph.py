@@ -19,6 +19,7 @@ from langchain_core.messages import (
 )
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.memory import MemorySaver
 
 # from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -57,7 +58,7 @@ class ImpersonateAgent:
             or "You're rajneesh Osho, indian philosopher. Answer every query just as he[OSHO] does, use concise answers."
         )
 
-    async def init_graph(self):
+    async def init_graph(self, local: bool):
         """Compiles the ChatBot graph with built-in MessagesState"""
         if not self.graph:
             builder = StateGraph(state_schema=MessagesState)
@@ -68,7 +69,9 @@ class ImpersonateAgent:
 
             # Could use MemorySaver in development.
             # memory = MemorySaver()
-            self.graph = builder.compile((await get_checkpointer())[0])
+            self.graph = builder.compile(
+                MemorySaver() if local else ((await get_checkpointer())[0])
+            )
 
         return self.graph
 
@@ -99,8 +102,8 @@ config = RunnableConfig(
 )
 
 
-async def compile_graph() -> CompiledStateGraph:
-    graph = await ImpersonateAgent(get_llm()).init_graph()
+async def compile_graph(local: bool = False) -> CompiledStateGraph:
+    graph = await ImpersonateAgent(get_llm()).init_graph(local)
 
     try:
         # Generate the PNG image from the graph
@@ -116,8 +119,8 @@ async def compile_graph() -> CompiledStateGraph:
     return graph
 
 
-async def main():
-    app = await ImpersonateAgent(get_llm()).init_graph()
+async def main(local: bool = False):
+    app = await ImpersonateAgent(get_llm()).init_graph(local)
 
     while True:
         query = input("User >>> ")

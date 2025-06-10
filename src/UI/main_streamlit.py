@@ -2,10 +2,12 @@
 main_streamlit
 ---
 
-This script is a simple, elegant Streamlit app that allows users to interact with a LangChain LLM Chatbot.
-It allows **multiple conversation threads**, with independent messages context.
+This script provides a simple, elegant Streamlit app for interacting with a LangChain LLM Chatbot.
+It supports **multiple conversation threads** with independent message contexts.
 
-TODO: Should be run with-in Corresponding Docker-Compose for DB and API Usage.
+Note:
+- This UI runs independently of any container or orchestration system.
+- It directly uses the LangGraph codebase, without additional context or API/DB layers.
 """
 
 import asyncio
@@ -16,8 +18,8 @@ import streamlit as st
 from src.chatbot.main.main_graph import AIMessageChunk, compile_graph, config
 from src.chatbot.utils import (
     LLM_MODEL_NAME,
-    get_checkpointer,
-    remove_state_from_checkpointer,
+    # get_checkpointer,
+    # remove_state_from_checkpointer,
     suggest_title,
     to_sync_generator,
 )
@@ -27,7 +29,7 @@ AVATARS_PATH = "src/chatbot/main/avatars"
 
 if "initialized" not in st.session_state:
     nest_asyncio.apply()
-    asyncio.run(get_checkpointer(open=True))
+    # asyncio.run(get_checkpointer(open=True))
     st.session_state.app = asyncio.run(compile_graph())
     st.session_state.initialized = True
 
@@ -141,15 +143,15 @@ if convo_id and (prompt := st.chat_input("What's on your mind?")):
         }
     )
 
-    # Do something on exit
-    @st.cache_data()
-    def on_exit():
-        """Run once on exit."""
-        asyncio.run(
-            remove_state_from_checkpointer(config.get("configurable", {})["thread_id"])
-        )
+    # # Do something on exit
+    # @st.cache_data()
+    # def on_exit():
+    #     """Run once on exit."""
+    #     asyncio.run(
+    #         remove_state_from_checkpointer(config.get("configurable", {})["thread_id"])
+    #     )
 
-    # Use `atexit` to run the function on exit
-    import atexit
+    # # Use `atexit` to run the function on exit
+    # import atexit
 
-    atexit.register(on_exit)
+    # atexit.register(on_exit)

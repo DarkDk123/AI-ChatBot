@@ -33,9 +33,13 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 
 ## How to Use Locally
 
-> [❌] Currently in development - **DO NOT TRY TO USE LOCALLY** - Won't work till I update the instructions.
->
-> **! Working on Architectural changes.**
+You can run the chatbot **locally** (default, recommended) or with **Docker** (coming soon).  
+**Local mode uses only temporary `in-memory storage`—conversations are lost on restart.** 🫧
+
+> Some architectural changes are in progress to run **Local/Dockerized** [May take time] ⏳
+
+<details open>
+<summary><strong>🔹 Local (Recommended)</strong></summary>
 
 1. **Clone the repository**:
    ```bash
@@ -52,15 +56,25 @@ It currently uses ***in-memory*** storage, so volatile for single run!
 3. **Install dependencies**:
    ```bash
    pip install uv # It's fast
-   uv pip install -r requirements.txt
+   uv pip install -r src/UI/requirements.txt
    ```
 
 4. **Configure environment variables**:
-   Create a `.env` file and add your HuggingFace token and model ID. (see [`.env.local.example`](.env.local.example))
+   Create a `.env` file and add your Groq API token and model ID. (see [`.env.local.example`](.env.local.example))
+
 5. **Run the Streamlit app**:
    ```bash
-   streamlit run main_streamlit.py
+   python -m streamlit run src/UI/main_streamlit.py
    ```
 
 6. **Access the service**:
    Open your browser and navigate to **`http://localhost:8501`** to access the **AI-ChatBot** Service.
+
+</details>
+
+<details>
+<summary><strong>🐳 Docker (Coming Soon)</strong></summary>
+
+Docker support is under development and not ready yet. Stay tuned for updates!
+
+</details>
